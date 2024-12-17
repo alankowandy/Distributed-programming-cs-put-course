@@ -4,51 +4,8 @@
 void mainLoop()
 {
     changeState(InRun);
-    srandom(time(NULL) + rank); // Unikalne ziarno generatora
-    int localValue = random() % 1000; // Wylosowana wartość
-    int values[size]; // Tablica do przechowywania wartości od wszystkich procesów
-    values[rank] = localValue; // Zapis własnej wartości
 
-    // Wysłanie własnej wartości do wszystkich innych procesów
-    for (int i = 0; i < size; i++) {
-        if (i != rank) {
-            MPI_Send(&localValue, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
-        }
-    }
-
-    // Odbieranie wartości od innych procesów
-    for (int i = 0; i < size - 1; i++) { // size - 1, bo własna wartość już jest zapisana
-        MPI_Status status;
-        int receivedValue;
-        MPI_Recv(&receivedValue, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
-        values[status.MPI_SOURCE] = receivedValue;
-    }
-
-    // Sortowanie wartości lokalnie
-    int sortedRanks[size];
-    for (int i = 0; i < size; i++) sortedRanks[i] = i; // Inicjalizacja tablicy ranków
-
-    for (int i = 0; i < size - 1; i++) {
-        for (int j = i + 1; j < size; j++) {
-            if (values[sortedRanks[i]] > values[sortedRanks[j]]) {
-                int temp = sortedRanks[i];
-                sortedRanks[i] = sortedRanks[j];
-                sortedRanks[j] = temp;
-            }
-        }
-    }
-
-    // Określenie roli: pierwsza połowa to zabójcy, druga połowa to ofiary
-    int role = -1; // 1 = zabójca, 0 = ofiara
-    for (int i = 0; i < size / 2; i++) {
-        if (sortedRanks[i] == rank) {
-            role = 1; // Zabójca
-            break;
-        }
-    }
-    if (role == -1) role = 0; // Ofiara, jeśli nie przypisano roli
-
-    debug("Proces %d wylosował %d i jest %s", rank, localValue, (role == 1) ? "zabójcą" : "ofiarą");
+    int role = assignRole(); // przypisanie roli procesu (0-ofiara, 1-zabójca)
 
     int pair = -1; // identyfikator pary
 

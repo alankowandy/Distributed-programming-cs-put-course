@@ -39,6 +39,8 @@ void sendPacket(packet_t *pkt, int destination, int tag);
 /* aktualizacja stanu zegara Lamporta */
 void updateLamportClock(int receivedTs);
 
+int assignRole();
+
 void requestAccess();
 
 void releaseAccess();

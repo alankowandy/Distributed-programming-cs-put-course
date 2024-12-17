@@ -68,13 +68,51 @@ void updateLamportClock(int receivedTs) {
     lamportClock = (lamportClock > receivedTs ? lamportClock : receivedTs) + 1;
 }
 
-// void assignRole(int role, int pair) {
-//     packet_t pkt = {0};
-//     pkt.data = role;
-//     pkt.pair = pair;
-//     sendPacket(&pkt, ROOT, ROLE_ASSIGN);
-//     debug("Przypisuję rolę: %d, paruję z: %d", role, pair);
-// }
+int assignRole() {
+    srandom(time(NULL) + rank); // Unikalne ziarno generatora
+    int localValue = random() % 1000; // Wylosowana wartość
+    int values[size]; // Tablica do przechowywania wartości od wszystkich procesów
+    values[rank] = localValue; // Zapis własnej wartości
+
+    // Wysłanie własnej wartości do wszystkich innych procesów
+    for (int i = 0; i < size; i++) {
+        if (i != rank) {
+            MPI_Send(&localValue, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+        }
+    }
+
+    // Odbieranie wartości od innych procesów
+    for (int i = 0; i < size - 1; i++) { // size - 1, bo własna wartość już jest zapisana
+        MPI_Status status;
+        int receivedValue;
+        MPI_Recv(&receivedValue, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+        values[status.MPI_SOURCE] = receivedValue;
+    }
+
+    // Sortowanie wartości lokalnie
+    int sortedRanks[size];
+    for (int i = 0; i < size; i++) sortedRanks[i] = i; // Inicjalizacja tablicy ranków
+
+    for (int i = 0; i < size - 1; i++) {
+        for (int j = i + 1; j < size; j++) {
+            if (values[sortedRanks[i]] > values[sortedRanks[j]]) {
+                int temp = sortedRanks[i];
+                sortedRanks[i] = sortedRanks[j];
+                sortedRanks[j] = temp;
+            }
+        }
+    }
+
+    // Określenie roli: pierwsza połowa to zabójcy, druga połowa to ofiary
+    for (int i = 0; i < size / 2; i++) {
+        if (sortedRanks[i] == rank) {
+            debug("Proces %d wylosował %d i jest zabójcą", rank, localValue);
+            return 1; // Zabójca
+        }
+    }
+    debug("Proces %d wylosował %d i jest ofiarą", rank, localValue);
+    return 0; // Ofiara
+}
 
 void requestAccess() {
     lamportClock++;
