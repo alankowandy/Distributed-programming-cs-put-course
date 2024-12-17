@@ -44,7 +44,7 @@ void sendPacket(packet_t *pkt, int destination, int tag)
 {
     int freepkt=0;
     if (pkt==0) { pkt = malloc(sizeof(packet_t)); freepkt=1;}
-    lamportClock++;
+    incrementLamportClock();
     pkt->ts = lamportClock;
     pkt->src = rank;
     MPI_Send( pkt, 1, MPI_PAKIET_T, destination, tag, MPI_COMM_WORLD);
@@ -63,6 +63,10 @@ void changeState( state_t newState )
     pthread_mutex_unlock( &stateMut );
 }
 
+void incrementLamportClock() {
+    lamportClock++;
+}
+
 void updateLamportClock(int receivedTs) {
     pthread_mutex_lock( &lamportClock );
     lamportClock = (lamportClock > receivedTs ? lamportClock : receivedTs) + 1;
@@ -78,7 +82,7 @@ packet_t assignRoleAndPair() {
     // Wysłanie własnej wartości do wszystkich procesów
     for (int i = 0; i < size; i++) {
         if (i != rank) {
-            MPI_Send(&localValue, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            sendPacket(&localValue, i, 0);
         }
     }
 
@@ -169,7 +173,6 @@ int assignRole() {
 
 void requestAccess() {
     lamportClock++;
-    //requestedPistols++;
     ackCount = 0;
 
     packet_t pkt = {lamportClock, rank, requestedPistols};
@@ -196,11 +199,8 @@ void handleRequest(packet_t *pkt, int src) {
     updateLamportClock(pkt->ts);
     debug("Proces %d otrzymał żądanie od procesu %d", rank, src);
 
-    if (requestedPistols < availablePistols || 
-        (requestedPistols == availablePistols && rank < src)) {
-        packet_t reply = {lamportClock, rank, 0};
-        sendPacket(&reply, src, WEAPON_ACK);
-    }
+    packet_t reply = {lamportClock, rank, 0};
+    sendPacket(&reply, src, WEAPON_ACK);
 }
 
 void handleReply() {
@@ -210,7 +210,6 @@ void handleReply() {
 
 void handleRelease(packet_t *pkt) {
     updateLamportClock(pkt->ts);
-    availablePistols++;
     debug("Proces %d otrzymał RELEASE od %d", rank, pkt->src);
 }
 

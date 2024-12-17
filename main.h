@@ -20,6 +20,7 @@
 extern int rank;
 extern int size;
 extern int lamportClock;
+extern int pistols;
 extern int wins;
 typedef enum {InRun, InPairing, InFight, InFinish} state_t;
 extern state_t stan;
