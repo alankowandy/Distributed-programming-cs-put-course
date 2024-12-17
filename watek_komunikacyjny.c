@@ -27,7 +27,7 @@ void *startKomWatek(void *ptr)
                 sendPacket(NULL, pakiet.src, PAIR_ACK);
                 break;
             case DUEL:
-                duel();
+                duel(pakiet.pair);
                 //debug("Proces %d rozpoczyna pojedynek z %d", rank, pakiet.src);
                 break;
         }

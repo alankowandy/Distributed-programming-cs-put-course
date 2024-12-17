@@ -5,7 +5,7 @@ void mainLoop()
 {
     changeState(InRun);
 
-    RolePair rolePair = assignRoleAndPair(); // Przypisanie roli i parowanie
+    packet_t rolePair = assignRoleAndPair(); // Przypisanie roli i parowanie
     int role = rolePair.role;
     int pair = rolePair.pair;
 

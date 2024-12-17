@@ -47,7 +47,7 @@ void check_thread_support(int provided)
 int main(int argc, char **argv)
 {
     MPI_Status status;
-    int provided;
+    int provided, cycles;
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
     check_thread_support(provided);
     srand(time(NULL) + rank); // inicjalizacja generatora liczb losowych
@@ -56,6 +56,8 @@ int main(int argc, char **argv)
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     pthread_create( &threadKom, NULL, startKomWatek , 0);
+    printf("Podaj liczbe cykli: ");
+    scanf("%d", &cycles);
 
     // implementacja pętli, która będzie wykonywała się przez określoną liczbę cykli
     for (int i = 0; i < cycles; i++) {

@@ -214,7 +214,7 @@ void handleRelease(packet_t *pkt) {
     debug("Proces %d otrzymał RELEASE od %d", rank, pkt->src);
 }
 
-void duel() {
+void duel(int pair) {
     sendPacket(NULL, pair, DUEL);
     int perc = random()%100;
     if (perc < 50) {

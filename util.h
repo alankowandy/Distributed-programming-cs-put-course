@@ -14,8 +14,8 @@ typedef struct {
 
 extern int lamportClock;
 extern int ackCount;
-extern int requestedPistols;
-extern int availablePistols;
+//extern int requestedPistols;
+//extern int availablePistols;
 
 #define NITEMS 4
 
