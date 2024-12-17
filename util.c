@@ -78,7 +78,7 @@ void updateLamportClock(int receivedTs) {
 
 void requestAccess() {
     lamportClock++;
-    requestedPistols++;
+    //requestedPistols++;
     ackCount = 0;
 
     packet_t pkt = {lamportClock, rank, requestedPistols};
