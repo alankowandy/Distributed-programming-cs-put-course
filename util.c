@@ -2,8 +2,10 @@
 #include "util.h"
 MPI_Datatype MPI_PAKIET_T;
 
+int lamportClock = 0;
 int ackCount = 0;
-int requestedPistols = 0;
+int myTimestamp = -1;
+WaitQueue waitQueue;
 
 struct tagNames_t{
     const char *name;
@@ -124,64 +126,19 @@ packet_t assignRoleAndPair() {
     return result;
 }
 
-/* funkcja przydzielająca role zabójcy/ofiary */
-int assignRole() {
-    srandom(time(NULL) + rank); // Unikalne ziarno generatora
-    int localValue = random() % 1000; // Wylosowana wartość
-    int values[size]; // Tablica do przechowywania wartości od wszystkich procesów
-    values[rank] = localValue; // Zapis własnej wartości
-
-    // Wysłanie własnej wartości do wszystkich innych procesów
-    for (int i = 0; i < size; i++) {
-        if (i != rank) {
-            MPI_Send(&localValue, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
-        }
-    }
-
-    // Odbieranie wartości od innych procesów
-    for (int i = 0; i < size - 1; i++) { // size - 1, bo własna wartość już jest zapisana
-        MPI_Status status;
-        int receivedValue;
-        MPI_Recv(&receivedValue, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
-        values[status.MPI_SOURCE] = receivedValue;
-    }
-
-    // Sortowanie wartości lokalnie
-    int sortedRanks[size];
-    for (int i = 0; i < size; i++) sortedRanks[i] = i; // Inicjalizacja tablicy ranków
-
-    for (int i = 0; i < size - 1; i++) {
-        for (int j = i + 1; j < size; j++) {
-            if (values[sortedRanks[i]] > values[sortedRanks[j]]) {
-                int temp = sortedRanks[i];
-                sortedRanks[i] = sortedRanks[j];
-                sortedRanks[j] = temp;
-            }
-        }
-    }
-
-    // Określenie roli: pierwsza połowa to zabójcy, druga połowa to ofiary
-    for (int i = 0; i < size / 2; i++) {
-        if (sortedRanks[i] == rank) {
-            debug("Proces %d wylosował %d i jest zabójcą", rank, localValue);
-            return 1; // Zabójca
-        }
-    }
-    debug("Proces %d wylosował %d i jest ofiarą", rank, localValue);
-    return 0; // Ofiara
-}
-
+// Wysłanie REQ do wszystkich
 void requestAccess() {
-    lamportClock++;
+    incrementLamportClock();
+    myTimestamp = lamportClock;
     ackCount = 0;
 
-    packet_t pkt = {lamportClock, rank, requestedPistols};
+    packet_t req = {myTimestamp, rank};
     for (int i = 0; i < size; i++) {
         if (i != rank) {
-            sendPacket(&pkt, i, WEAPON_REQ);
+            sendPacket(&req, i, REQ);
         }
     }
-    debug("Proces %d wysyła żądanie o pistolet", rank);
+    debug("Proces %d wysłał REQ", rank);
 }
 
 void releaseAccess() {
@@ -195,26 +152,44 @@ void releaseAccess() {
     debug("Proces %d zwalnia pistolet", rank);
 }
 
-void handleRequest(packet_t *pkt, int src) {
-    updateLamportClock(pkt->ts);
-    debug("Proces %d otrzymał żądanie od procesu %d", rank, src);
+// Obsługa otrzymanego REQ
+void handleRequest(int ts, int src) {
+    updateLamportClock(ts);
+    debug("Proces %d otrzymał REQ od %d", rank, src);
 
-    packet_t reply = {lamportClock, rank, 0};
-    sendPacket(&reply, src, WEAPON_ACK);
+    // Jeśli moje żądanie ma niższy priorytet
+    if (ts < myTimestamp || (ts == myTimestamp && src < rank)) {
+        packet_t ack = {lamportClock, rank};
+        sendPacket(&ack, src, ACK);
+        debug("Proces %d wysłał ACK do %d", rank, src);
+    } else {
+        addToWaitQueue(ts, src);
+        debug("Proces %d dodał %d do kolejki oczekujących", rank, src);
+    }
 }
 
-void handleReply() {
+// Obsługa otrzymanego ACK
+void handleAck() {
     ackCount++;
-    debug("Proces %d otrzymał WEAPON_ACK", rank);
+    debug("Proces %d otrzymał ACK (ackCount=%d)", rank, ackCount);
 }
 
-void handleRelease(packet_t *pkt) {
-    updateLamportClock(pkt->ts);
-    debug("Proces %d otrzymał RELEASE od %d", rank, pkt->src);
+// Zwolnienie sekcji krytycznej i wysłanie ACK do procesów w kolejce
+void releaseAccess() {
+    myTimestamp = -1;
+    debug("Proces %d zwalnia sekcję krytyczną", rank);
+
+    // Wysłanie ACK do procesów z kolejki
+    for (int i = 0; i < waitQueue.size; i++) {
+        packet_t ack = {lamportClock, rank};
+        sendPacket(&ack, waitQueue.queue[i].src, ACK);
+        debug("Proces %d wysłał ACK do %d z kolejki", rank, waitQueue.queue[i].src);
+    }
+    waitQueue.size = 0;
 }
 
+// TO-DO
 void duel(int pair) {
-    sendPacket(NULL, pair, DUEL);
     int perc = random()%100;
     if (perc < 50) {
         wins++;

@@ -10,12 +10,22 @@ void mainLoop()
     int pair = rolePair.pair;
 
     if (role == 1) { // Zabójca
-        changeState(InRun);
         requestAccess();
 
-        while (ackCount < size - 1) {
-            sleep(SEC_IN_STATE);
+        while (ackCount < size - pistols) {
+        MPI_Status status;
+        packet_t pkt;
+        MPI_Recv(&pkt, 1, MPI_PAKIET_T, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+
+        switch (status.MPI_TAG) {
+            case REQ:
+                handleRequest(pkt.ts, status.MPI_SOURCE);
+                break;
+            case ACK:
+                handleAck();
+                break;
         }
+    }
 
         changeState(InFight);
         debug("Proces %d atakuje proces %d", rank, pair);
@@ -34,24 +44,6 @@ void mainLoop()
     }
     
     while (stan != InFinish) {
-        // int perc = random()%100; 
-
-        // if (perc<STATE_CHANGE_PROB) {
-        //     if (stan==InRun) {
-		// debug("Zmieniam stan na wysyłanie");
-		// changeState( InSend );
-		// packet_t *pkt = malloc(sizeof(packet_t));
-		// pkt->data = perc;
-		// perc = random()%100;
-		// tag = ( perc < 25 ) ? FINISH : APP_PKT;
-		// debug("Perc: %d", perc);
-		
-		// sendPacket( pkt, (rank+1)%size, tag);
-		// changeState( InRun );
-		// debug("Skończyłem wysyłać");
-        //     } else {
-        //     }
-        // }
         sleep(SEC_IN_STATE);
     }
 }

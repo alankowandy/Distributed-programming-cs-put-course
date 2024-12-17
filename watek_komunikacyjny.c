@@ -14,17 +14,11 @@ void *startKomWatek(void *ptr)
         updateLamportClock(pakiet.ts);
 
         switch (status.MPI_TAG) {
-            case WEAPON_REQ:
-                handleRequest(&pakiet, status.MPI_SOURCE);
+            case REQ:
+                handleRequest(pkt.ts, status.MPI_SOURCE);
                 break;
-            case WEAPON_ACK:
-                handleReply();
-                break;
-            case RELEASE:
-                handleRelease(&pakiet);
-                break;
-            case PAIR_REQ:
-                sendPacket(NULL, pakiet.src, PAIR_ACK);
+            case ACK:
+                handleAck();
                 break;
             case DUEL:
                 duel(pakiet.pair);
