@@ -5,26 +5,12 @@ void mainLoop()
 {
     changeState(InRun);
 
-    int role = assignRole(); // przypisanie roli procesu (0-ofiara, 1-zabójca)
+    RolePair rolePair = assignRoleAndPair(); // Przypisanie roli i parowanie
+    int role = rolePair.role;
+    int pair = rolePair.pair;
 
-    int pair = -1; // identyfikator pary
-
-    // wysłanie żądania sparowania przez zabójcę
-    if (role == 1) {
-        changeState(InPairing);
-        for (int i = 0; i < size; i++) {
-            if (i != rank) {
-                sendPacket(NULL, i, PAIR_REQ);
-            }
-        }
-        MPI_Status status;
-        packet_t pkt;
-        MPI_Recv(&pkt, 1, MPI_PAKIET_T, MPI_ANY_SOURCE, PAIR_ACK, MPI_COMM_WORLD, &status);
-        pair = pkt.src;
-        updateLamportClock(pkt.ts);
-        debug("Jestem zabójcą, sparowano mnie z procesem %d", pair);
+    if (role == 1) { // Zabójca
         changeState(InRun);
-
         requestAccess();
 
         while (ackCount < size - 1) {
@@ -32,24 +18,19 @@ void mainLoop()
         }
 
         changeState(InFight);
-        debug("Proces %d wchodzi do sekcji krytycznej", rank);
+        debug("Proces %d atakuje proces %d", rank, pair);
         sendPacket(NULL, pair, DUEL);
 
         releaseAccess();
         changeState(InFinish);
 
-    } else {  // odbiór żądania sparowania przez ofiarę
+    } else { // Ofiara
         MPI_Status status;
         packet_t pkt;
         changeState(InPairing);
-        MPI_Recv(&pkt, 1, MPI_PAKIET_T, MPI_ANY_SOURCE, PAIR_REQ, MPI_COMM_WORLD, &status);
-        updateLamportClock(pkt.ts);
-        if (pair == -1) {
-            pair = pkt.src;
-            sendPacket(NULL, pair, PAIR_ACK);
-            debug("Jestem ofiarą, sparowano mnie z procesem %d", pair);
-            changeState(InFinish);
-        }
+        MPI_Recv(&pkt, 1, MPI_PAKIET_T, MPI_ANY_SOURCE, DUEL, MPI_COMM_WORLD, &status);
+        debug("Proces %d został zaatakowany przez proces %d", rank, pkt.src);
+        changeState(InFinish);
     }
     
     while (stan != InFinish) {

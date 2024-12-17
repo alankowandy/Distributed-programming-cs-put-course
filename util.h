@@ -7,17 +7,17 @@ typedef struct {
     int ts;       /* timestamp (zegar lamporta */
     int src;  
 
-    int data;     /* rola wątku (0 = ofiara, 1 = zabójca) */
+    int role;     /* rola wątku (0 = ofiara, 1 = zabójca) */
     int pair;     /* identyfikator pary */
 } packet_t;
-/* packet_t ma trzy pola, więc NITEMS=3. Wykorzystane w inicjuj_typ_pakietu */
+/* packet_t ma trzy pola, więc NITEMS=4. Wykorzystane w inicjuj_typ_pakietu */
 
 extern int lamportClock;
 extern int ackCount;
 extern int requestedPistols;
 extern int availablePistols;
 
-#define NITEMS 3
+#define NITEMS 4
 
 /* Typy wiadomości */
 #define APP_PKT 1
@@ -39,6 +39,9 @@ void sendPacket(packet_t *pkt, int destination, int tag);
 /* aktualizacja stanu zegara Lamporta */
 void updateLamportClock(int receivedTs);
 
+packet_t assignRoleAndPair();
+
+/* funkcja przydzielająca role zabójcy/ofiary */
 int assignRole();
 
 void requestAccess();

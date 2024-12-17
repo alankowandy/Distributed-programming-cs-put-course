@@ -17,8 +17,7 @@ const char const *tag2string( int tag )
     }
     return "<unknown>";
 }
-/* tworzy typ MPI_PAKIET_T
-*/
+/* tworzy typ MPI_PAKIET_T */
 void inicjuj_typ_pakietu()
 {
     /* Stworzenie typu */
@@ -32,7 +31,7 @@ void inicjuj_typ_pakietu()
     MPI_Aint     offsets[NITEMS]; 
     offsets[0] = offsetof(packet_t, ts);
     offsets[1] = offsetof(packet_t, src);
-    offsets[2] = offsetof(packet_t, data);
+    offsets[2] = offsetof(packet_t, role);
     offsets[3] = offsetof(packet_t, pair);
 
     MPI_Type_create_struct(NITEMS, blocklengths, offsets, typy, &MPI_PAKIET_T);
@@ -65,9 +64,63 @@ void changeState( state_t newState )
 }
 
 void updateLamportClock(int receivedTs) {
+    pthread_mutex_lock( &lamportClock );
     lamportClock = (lamportClock > receivedTs ? lamportClock : receivedTs) + 1;
+    pthread_mutex_unlock( &lamportClock );
 }
 
+packet_t assignRoleAndPair() {
+    srandom(time(NULL) + rank); // Unikalne ziarno generatora
+    int localValue = random() % 1000; // Wylosowana wartość
+    int values[size]; // Tablica wartości od wszystkich procesów
+    values[rank] = localValue;
+
+    // Wysłanie własnej wartości do wszystkich procesów
+    for (int i = 0; i < size; i++) {
+        if (i != rank) {
+            MPI_Send(&localValue, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+        }
+    }
+
+    // Odbieranie wartości od innych procesów
+    for (int i = 0; i < size - 1; i++) {
+        MPI_Status status;
+        int receivedValue;
+        MPI_Recv(&receivedValue, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+        values[status.MPI_SOURCE] = receivedValue;
+    }
+
+    // Sortowanie wartości
+    int sortedRanks[size];
+    for (int i = 0; i < size; i++) sortedRanks[i] = i;
+
+    for (int i = 0; i < size - 1; i++) {
+        for (int j = i + 1; j < size; j++) {
+            if (values[sortedRanks[i]] > values[sortedRanks[j]]) {
+                int temp = sortedRanks[i];
+                sortedRanks[i] = sortedRanks[j];
+                sortedRanks[j] = temp;
+            }
+        }
+    }
+
+    // Przydzielenie roli i dobór par
+    packet_t result;
+    int half = size / 2;
+    result.role = (rank < half) ? 1 : 0; // Zabójcy mają najniższe wartości
+
+    if (result.role == 1) { // Zabójcy wybierają ofiary
+        int victimIndex = half + (rank % half); // Wybór ofiary
+        result.pair = sortedRanks[victimIndex];
+        debug("Proces %d jest zabójcą i dobiera ofiarę %d", rank, result.pair);
+    } else { // Ofiary czekają na atak
+        result.pair = -1; // Ofiara na razie nie ma przypisanej pary
+        debug("Proces %d jest ofiarą", rank);
+    }
+    return result;
+}
+
+/* funkcja przydzielająca role zabójcy/ofiary */
 int assignRole() {
     srandom(time(NULL) + rank); // Unikalne ziarno generatora
     int localValue = random() % 1000; // Wylosowana wartość
