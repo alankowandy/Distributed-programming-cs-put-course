@@ -141,16 +141,16 @@ void requestAccess() {
     debug("Proces %d wysłał REQ", rank);
 }
 
-void releaseAccess() {
-    lamportClock++;
-    packet_t pkt = {lamportClock, rank, 0};
-    for (int i = 0; i < size; i++) {
-        if (i != rank) {
-            sendPacket(&pkt, i, RELEASE);
-        }
-    }
-    debug("Proces %d zwalnia pistolet", rank);
-}
+// void releaseAccess() {
+//     lamportClock++;
+//     packet_t pkt = {lamportClock, rank, 0};
+//     debug("Proces %d zwalnia pistolet", rank);
+//     for (int i = 0; i < size; i++) {
+//         if (i != rank) {
+//             sendPacket(&pkt, i, RELEASE);
+//         }
+//     }
+// }
 
 // Obsługa otrzymanego REQ
 void handleRequest(int ts, int src) {

@@ -2,6 +2,8 @@
 #define UTILH
 #include "main.h"
 
+#define MAX_QUEUE 20
+
 /* typ pakietu */
 typedef struct {
     int ts;       /* timestamp (zegar lamporta) */
@@ -12,7 +14,7 @@ typedef struct {
 /* packet_t ma trzy pola, więc NITEMS=4. Wykorzystane w inicjuj_typ_pakietu */
 
 typedef struct {
-    request_t queue[100]; // Kolejka oczekujących
+    packet_t queue[MAX_QUEUE]; // Kolejka oczekujących
     int size;
 } WaitQueue;
 
@@ -43,18 +45,18 @@ void incrementLamportClock();
 /* aktualizacja stanu zegara Lamporta */
 void updateLamportClock(int receivedTs);
 
+/* funkcja przydzielająca role zabójcy/ofiary i dobierająca w parę */
 packet_t assignRoleAndPair();
-
-/* funkcja przydzielająca role zabójcy/ofiary */
-int assignRole();
 
 void requestAccess();
 
 void releaseAccess();
 
-void handleRequest(packet_t *pkt, int src);
-void handleReply();
-void handleRelease(packet_t *pkt);
+void handleRequest(int ts, int src);
 
-void duel();
+void handleAck();
+
+void releaseAccess();
+
+void duel(int pair);
 #endif
