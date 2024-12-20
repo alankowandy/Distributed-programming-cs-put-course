@@ -17,6 +17,7 @@ void *startKomWatek(void *ptr)
             case REQ:
                 handleRequest(pkt.ts, status.MPI_SOURCE);
                 break;
+                // TO-DO - obsługa ACK i RELEASE osobno?
             case ACK:
                 handleAck();
                 break;
