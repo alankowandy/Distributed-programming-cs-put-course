@@ -76,6 +76,7 @@ void updateLamportClock(int receivedTs) {
 }
 
 packet_t assignRoleAndPair() {
+    changeState(PAIRING);
     srandom(time(NULL) + rank); // Unikalne ziarno generatora
     int localValue = random() % 1000; // Wylosowana wartość
     int values[size]; // Tablica wartości od wszystkich procesów
@@ -139,6 +140,7 @@ void requestAccess() {
         }
     }
     debug("Proces %d wysłał REQ", rank);
+    changeState(WAIT);
 }
 
 // void releaseAccess() {
@@ -157,12 +159,12 @@ void handleRequest(int ts, int src) {
     updateLamportClock(ts);
     debug("Proces %d otrzymał REQ od %d", rank, src);
 
-    // Jeśli moje żądanie ma niższy priorytet
+    // jeśli moje żądanie ma niższy priorytet to wysyłam ACK
     if (ts < myTimestamp || (ts == myTimestamp && src < rank)) {
         packet_t ack = {lamportClock, rank};
         sendPacket(&ack, src, ACK);
         debug("Proces %d wysłał ACK do %d", rank, src);
-    } else {
+    } else { // jeśli moje żądanie ma większy priorytet to dodaje do kolejki oczekujacych
         addToWaitQueue(ts, src);
         debug("Proces %d dodał %d do kolejki oczekujących", rank, src);
     }
