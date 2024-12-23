@@ -4,7 +4,7 @@ MPI_Datatype MPI_PAKIET_T;
 
 int lamportClock = 0;
 int ackCount = 0;
-int myTimestamp = -1;
+//int myTimestamp = -1;
 WaitQueue waitQueue;
 
 struct tagNames_t{
@@ -57,7 +57,7 @@ void sendPacket(packet_t *pkt, int destination, int tag)
 void changeState( state_t newState )
 {
     pthread_mutex_lock( &stateMut );
-    if (stan==InFinish) { 
+    if (stan==FINISHED) { 
 	pthread_mutex_unlock( &stateMut );
         return;
     }
@@ -130,10 +130,10 @@ packet_t assignRoleAndPair() {
 // Wysłanie REQ do wszystkich
 void requestAccess() {
     incrementLamportClock();
-    myTimestamp = lamportClock;
+    //myTimestamp = lamportClock;
     ackCount = 0;
 
-    packet_t req = {myTimestamp, rank};
+    packet_t req = {lamportClock, rank};
     for (int i = 0; i < size; i++) {
         if (i != rank) {
             sendPacket(&req, i, REQ);
@@ -143,24 +143,13 @@ void requestAccess() {
     changeState(WAIT);
 }
 
-// void releaseAccess() {
-//     lamportClock++;
-//     packet_t pkt = {lamportClock, rank, 0};
-//     debug("Proces %d zwalnia pistolet", rank);
-//     for (int i = 0; i < size; i++) {
-//         if (i != rank) {
-//             sendPacket(&pkt, i, RELEASE);
-//         }
-//     }
-// }
-
 // Obsługa otrzymanego REQ
 void handleRequest(int ts, int src) {
     updateLamportClock(ts);
     debug("Proces %d otrzymał REQ od %d", rank, src);
 
     // jeśli moje żądanie ma niższy priorytet to wysyłam ACK
-    if (ts < myTimestamp || (ts == myTimestamp && src < rank)) {
+    if (ts < lamportClock || (ts == lamportClock && src < rank)) {
         packet_t ack = {lamportClock, rank};
         sendPacket(&ack, src, ACK);
         debug("Proces %d wysłał ACK do %d", rank, src);
@@ -178,7 +167,7 @@ void handleAck() {
 
 // Zwolnienie sekcji krytycznej i wysłanie ACK do procesów w kolejce
 void releaseAccess() {
-    myTimestamp = -1;
+    //myTimestamp = -1;
     debug("Proces %d zwalnia sekcję krytyczną", rank);
 
     // Wysłanie ACK do procesów z kolejki

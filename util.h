@@ -23,7 +23,7 @@ extern int lamportClock;   // Zegar Lamporta
 extern int ackCount;       // Licznik zgód
 extern int pistols;        // Liczba pistoletów
 // TO-DO - Czy myTimestamp jest potrzebne?
-extern int myTimestamp;    // Znacznik czasowy mojego żądania
+//extern int myTimestamp;    // Znacznik czasowy mojego żądania
 extern WaitQueue waitQueue;
 
 #define NITEMS 4

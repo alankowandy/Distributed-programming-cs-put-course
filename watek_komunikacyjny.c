@@ -8,8 +8,7 @@ void *startKomWatek(void *ptr)
     int is_message = FALSE;
     packet_t pakiet;
     /* Obrazuje pętlę odbierającą pakiety o różnych typach */
-    while ( stan!=InFinish ) {
-	//debug("czekam na recv");
+    while ( stan!=FINISHED ) {
         MPI_Recv( &pakiet, 1, MPI_PAKIET_T, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
         updateLamportClock(pakiet.ts);
 
