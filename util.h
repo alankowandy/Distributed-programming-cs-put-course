@@ -42,6 +42,7 @@ void inicjuj_typ_pakietu();
 /* wysyłanie pakietu, skrót: wskaźnik do pakietu (0 oznacza stwórz pusty pakiet), do kogo, z jakim typem */
 void sendPacket(packet_t *pkt, int destination, int tag);
 
+/* inkrementacja zegara Lamporta */
 void incrementLamportClock();
 
 /* aktualizacja stanu zegara Lamporta */
@@ -50,15 +51,23 @@ void updateLamportClock(int receivedTs);
 /* funkcja przydzielająca role zabójcy/ofiary i dobierająca w parę */
 packet_t assignRoleAndPair();
 
+/* wysłanie REQ o wejście do sekcji krytycznej do reszty procesów */
 void requestAccess();
 
-void releaseAccess();
+int comparePriority(packet_t a, packet_t b);
 
+/* dodanie procesu do kolejki oczekujących na dostęp */
+void addToWaitQueue(int ts, int src); 
+
+/* obsługa otrzymanego REQ od innego procesu */
 void handleRequest(int ts, int src);
 
+/* obsługa otrzymanego ACK od procesu */
 void handleAck();
 
+/* zwolnienie sekcji krytycznej i wysłanie ACK do procesów w kolejce */
 void releaseAccess();
 
+/* funkcja obsługująca pojedynek - TO-DO */
 void duel(int pair);
 #endif

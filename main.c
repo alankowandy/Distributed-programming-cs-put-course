@@ -7,7 +7,7 @@ int lampotClock = 0;
 int cycles = 0;
 int pistols = 0;
 int wins = 0;
-state_t stan=InRun;
+state_t stan=REST;
 pthread_t threadKom, threadMon;
 pthread_mutex_t stateMut = PTHREAD_MUTEX_INITIALIZER;
 

@@ -5,7 +5,7 @@ MPI_Datatype MPI_PAKIET_T;
 int lamportClock = 0;
 int ackCount = 0;
 //int myTimestamp = -1;
-WaitQueue waitQueue;
+WaitQueue waitQueue = { .size = 0 }; // Inicjalizacja kolejki
 
 struct tagNames_t{
     const char *name;
@@ -141,6 +141,39 @@ void requestAccess() {
     }
     debug("Proces %d wysłał REQ", rank);
     changeState(WAIT);
+}
+
+int comparePriority(packet_t a, packet_t b) {
+    if (a.ts < b.ts) return -1; // Mniejszy znacznik czasu = wyższy priorytet
+    if (a.ts > b.ts) return 1;
+    return (a.src < b.src) ? -1 : 1; // Przy równych znacznikach czasu niższy rank = wyższy priorytet
+}
+
+/* dodanie procesu do kolejki oczekujących na dostęp */
+void addToWaitQueue(int ts, int src) {
+    if (waitQueue.size < 100) {
+        packet_t pkt = { .ts = ts, .src = src };
+
+        // Dodajemy nowy element na koniec kolejki
+        waitQueue.queue[waitQueue.size] = pkt;
+        waitQueue.size++;
+
+        // Sortowanie kolejki według priorytetu
+        for (int i = waitQueue.size - 1; i > 0; i--) {
+            if (comparePriority(waitQueue.queue[i - 1], waitQueue.queue[i]) > 0) {
+                // Zamiana elementów, jeśli poprzedni ma niższy priorytet
+                packet_t temp = waitQueue.queue[i - 1];
+                waitQueue.queue[i - 1] = waitQueue.queue[i];
+                waitQueue.queue[i] = temp;
+            } else {
+                break; // Kolejka jest już uporządkowana
+            }
+        }
+
+        debug("Proces %d dodał REQ od %d (ts=%d) do kolejki priorytetowej", rank, src, ts);
+    } else {
+        debug("Proces %d: kolejka oczekujących jest pełna, nie można dodać REQ od %d", rank, src);
+    }
 }
 
 // Obsługa otrzymanego REQ
