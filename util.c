@@ -85,7 +85,8 @@ packet_t assignRoleAndPair() {
     // Wysłanie własnej wartości do wszystkich procesów
     for (int i = 0; i < size; i++) {
         if (i != rank) {
-            sendPacket(&localValue, i, 0);
+            MPI_Send(&localValue, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            debug("Wylosowałem %d. Wysyłam wartość do procesu %d", localValue, i);
         }
     }
 
@@ -93,8 +94,11 @@ packet_t assignRoleAndPair() {
     for (int i = 0; i < size - 1; i++) {
         MPI_Status status;
         int receivedValue;
-        MPI_Recv(&receivedValue, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
-        values[status.MPI_SOURCE] = receivedValue;
+        if (i != rank) {
+            MPI_Recv(&receivedValue, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+            debug("Odebrałem %d do procesu %d", localValue, status.MPI_SOURCE);
+            values[status.MPI_SOURCE] = receivedValue;
+        }
     }
 
     // Sortowanie wartości
