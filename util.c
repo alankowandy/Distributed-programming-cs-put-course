@@ -219,10 +219,27 @@ void releaseAccess() {
 // TO-DO
 void duel(int pair) {
     int perc = random()%100;
-    if (perc < 50) {
+    int win;
+    if (perc > 50) {
+        win = 1;
+        MPI_Send(&win, 1, MPI_INT, pair, DUEL, MPI_COMM_WORLD);
         wins++;
-        debug("Proces %d wygrywa pojedynek", rank);
+        debug("Proces %d wygrywa pojedynek i zabija %d", rank, pair);
+    } else {
+        win = 0;
+        MPI_Send(&win, 1, MPI_INT, pair, DUEL, MPI_COMM_WORLD);
+    }
+}
+
+void handleDuel(int pair) {
+    int win;
+    MPI_Status status;
+    MPI_Recv(&win, 1, MPI_INT, pair, 0, MPI_COMM_WORLD, &status);
+    if (!win) {
+        debug("Proces %d wygrywa pojedynek i ucieka przed %d", rank, pair);
+        wins++;
     } else {
         debug("Proces %d przegrywa pojedynek", rank);
     }
+    changeState(FINISHED);
 }

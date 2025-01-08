@@ -29,7 +29,8 @@ void mainLoop()
 
         changeState(INSECTION);
         debug("Proces %d atakuje proces %d", rank, pair);
-        sendPacket(NULL, pair, DUEL);
+        //sendPacket(NULL, pair, DUEL);
+        duel(pair);
 
         releaseAccess();
         changeState(FINISHED);
@@ -46,7 +47,7 @@ void mainLoop()
                     handleRequest(pkt.ts, status.MPI_SOURCE);
                     break;
                 case DUEL:
-                    // TO-DO
+                    handleDuel(pair);
                     break;
             }
         }

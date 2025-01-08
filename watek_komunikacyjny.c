@@ -20,10 +20,10 @@ void *startKomWatek(void *ptr)
             case ACK:
                 handleAck();
                 break;
-            case DUEL:
-                duel(pakiet.pair);
-                //debug("Proces %d rozpoczyna pojedynek z %d", rank, pakiet.src);
-                break;
+            // case DUEL:
+            //     duel(pakiet.pair);
+            //     //debug("Proces %d rozpoczyna pojedynek z %d", rank, pakiet.src);
+            //     break;
         }
     }
 }
