@@ -66,13 +66,15 @@ void changeState( state_t newState )
 }
 
 void incrementLamportClock() {
+    //pthread_mutex_lock( &lamportMut );
     lamportClock++;
+    //pthread_mutex_unlock( &lamportMut );
 }
 
 void updateLamportClock(int receivedTs) {
-    pthread_mutex_lock( &lamportClock );
+    //pthread_mutex_lock( &lamportMut );
     lamportClock = (lamportClock > receivedTs ? lamportClock : receivedTs) + 1;
-    pthread_mutex_unlock( &lamportClock );
+    //pthread_mutex_unlock( &lamportMut );
 }
 
 packet_t assignRoleAndPair() {
@@ -80,54 +82,82 @@ packet_t assignRoleAndPair() {
     srandom(time(NULL) + rank); // Unikalne ziarno generatora
     int localValue = random() % 1000; // Wylosowana wartość
     int values[size]; // Tablica wartości od wszystkich procesów
-    values[rank] = localValue;
+    int token[size];  // Token do przesyłania wartości w pierścieniu
 
-    // Wysłanie własnej wartości do wszystkich procesów
-    for (int i = 0; i < size; i++) {
-        if (i != rank) {
-            MPI_Send(&localValue, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
-            debug("Wylosowałem %d. Wysyłam wartość do procesu %d", localValue, i);
+    if (rank == 0) {
+        // Proces 0 inicjuje token i zapisuje swoją wartość
+        token[0] = localValue;
+        for (int i = 1; i < size; i++) {
+            token[i] = -1; // Inicjalizacja pustych miejsc
         }
-    }
 
-    // Odbieranie wartości od innych procesów
-    for (int i = 0; i < size - 1; i++) {
-        MPI_Status status;
-        int receivedValue;
-        if (i != rank) {
-            MPI_Recv(&receivedValue, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
-            debug("Odebrałem %d do procesu %d", localValue, status.MPI_SOURCE);
-            values[status.MPI_SOURCE] = receivedValue;
-        }
-    }
+        // Przekazanie tokenu do następnego procesu
+        MPI_Send(token, size, MPI_INT, 1, 0, MPI_COMM_WORLD);
+        debug("Wysłałem token do procesu 1");
 
-    // Sortowanie wartości
-    int sortedRanks[size];
-    for (int i = 0; i < size; i++) sortedRanks[i] = i;
+        // Odbiór finalnego tokenu z wartościami od ostatniego procesu
+        MPI_Recv(token, size, MPI_INT, size - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        debug("Odebrałem finalny token od procesu %d", size - 1);
 
-    for (int i = 0; i < size - 1; i++) {
-        for (int j = i + 1; j < size; j++) {
-            if (values[sortedRanks[i]] > values[sortedRanks[j]]) {
-                int temp = sortedRanks[i];
-                sortedRanks[i] = sortedRanks[j];
-                sortedRanks[j] = temp;
+        // Sortowanie wartości
+        debug("Sortuję wartości...");
+        for (int i = 0; i < size - 1; i++) {
+            for (int j = i + 1; j < size; j++) {
+                if (token[i] > token[j]) {
+                    int temp = token[i];
+                    token[i] = token[j];
+                    token[j] = temp;
+                }
             }
         }
+
+        // Przekazanie posortowanego tokenu do następnego procesu
+        MPI_Send(token, size, MPI_INT, 1, 0, MPI_COMM_WORLD);
+        debug("Wysłałem posortowany token do procesu 1");
+    } else {
+        // Odbiór tokenu od poprzedniego procesu
+        MPI_Recv(token, size, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        debug("Odebrałem token od procesu %d", rank - 1);
+
+        // Dodanie swojej wartości do tokenu
+        token[rank] = localValue;
+        debug("Dodałem swoją wartość %d do tokenu", localValue);
+
+        // Przekazanie tokenu do następnego procesu
+        int nextProcess = (rank + 1) % size;
+        MPI_Send(token, size, MPI_INT, nextProcess, 0, MPI_COMM_WORLD);
+        debug("Wysłałem token do procesu %d", nextProcess);
+
+        // Odbiór posortowanego tokenu od poprzedniego procesu
+        MPI_Recv(token, size, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        debug("Odebrałem posortowany token od procesu %d", rank - 1);
+
+        // Przekazanie posortowanego tokenu do następnego procesu
+        if (rank != size - 1) {
+            MPI_Send(token, size, MPI_INT, nextProcess, 0, MPI_COMM_WORLD);
+            debug("Wysłałem posortowany token do procesu %d", nextProcess);
+        }
     }
 
-    // Przydzielenie roli i dobór par
+    // Zapisanie wartości do tablicy lokalnej
+    for (int i = 0; i < size; i++) {
+        values[i] = token[i];
+    }
+
+    // Przydzielenie ról i dobór par
     packet_t result;
     int half = size / 2;
     result.role = (rank < half) ? 1 : 0; // Zabójcy mają najniższe wartości
 
     if (result.role == 1) { // Zabójcy wybierają ofiary
         int victimIndex = half + (rank % half); // Wybór ofiary
-        result.pair = sortedRanks[victimIndex];
-        debug("Proces %d jest zabójcą i dobiera ofiarę %d", rank, result.pair);
+        result.pair = victimIndex;
+        debug("Jestem zabójcą i dobieram ofiarę %d", result.pair);
     } else { // Ofiary czekają na atak
         result.pair = -1; // Ofiara na razie nie ma przypisanej pary
-        debug("Proces %d jest ofiarą", rank);
+        debug("Jestem ofiarą");
     }
+
     return result;
 }
 
@@ -143,7 +173,7 @@ void requestAccess() {
             sendPacket(&req, i, REQ);
         }
     }
-    debug("Proces %d wysłał REQ", rank);
+    debug("Wysłałem REQ");
     changeState(WAIT);
 }
 
@@ -174,44 +204,44 @@ void addToWaitQueue(int ts, int src) {
             }
         }
 
-        debug("Proces %d dodał REQ od %d (ts=%d) do kolejki priorytetowej", rank, src, ts);
+        debug("Dodałem REQ od %d (ts=%d) do kolejki priorytetowej", src, ts);
     } else {
-        debug("Proces %d: kolejka oczekujących jest pełna, nie można dodać REQ od %d", rank, src);
+        debug("Kolejka oczekujących jest pełna, nie można dodać REQ od %d", src);
     }
 }
 
 // Obsługa otrzymanego REQ
 void handleRequest(int ts, int src) {
     updateLamportClock(ts);
-    debug("Proces %d otrzymał REQ od %d", rank, src);
+    debug("Otrzymałem REQ od %d", src);
 
     // jeśli moje żądanie ma niższy priorytet to wysyłam ACK
     if (ts < lamportClock || (ts == lamportClock && src < rank)) {
         packet_t ack = {lamportClock, rank};
         sendPacket(&ack, src, ACK);
-        debug("Proces %d wysłał ACK do %d", rank, src);
+        debug("Wysłałem ACK do %d", src);
     } else { // jeśli moje żądanie ma większy priorytet to dodaje do kolejki oczekujacych
         addToWaitQueue(ts, src);
-        debug("Proces %d dodał %d do kolejki oczekujących", rank, src);
+        debug("Dodałem %d do kolejki oczekujących", src);
     }
 }
 
 // Obsługa otrzymanego ACK
 void handleAck() {
     ackCount++;
-    debug("Proces %d otrzymał ACK (ackCount=%d)", rank, ackCount);
+    debug("Otrzymałem ACK (ackCount=%d)", ackCount);
 }
 
 // Zwolnienie sekcji krytycznej i wysłanie ACK do procesów w kolejce
 void releaseAccess() {
     //myTimestamp = -1;
-    debug("Proces %d zwalnia sekcję krytyczną", rank);
+    debug("Zwalniam sekcję krytyczną");
 
     // Wysłanie ACK do procesów z kolejki
     for (int i = 0; i < waitQueue.size; i++) {
         packet_t ack = {lamportClock, rank};
         sendPacket(&ack, waitQueue.queue[i].src, ACK);
-        debug("Proces %d wysłał ACK do %d z kolejki", rank, waitQueue.queue[i].src);
+        debug("Wysłałem ACK do %d z kolejki", waitQueue.queue[i].src);
     }
     waitQueue.size = 0;
 }
@@ -224,7 +254,7 @@ void duel(int pair) {
         win = 1;
         MPI_Send(&win, 1, MPI_INT, pair, DUEL, MPI_COMM_WORLD);
         wins++;
-        debug("Proces %d wygrywa pojedynek i zabija %d", rank, pair);
+        debug("Wygrywam pojedynek i zabijam %d", pair);
     } else {
         win = 0;
         MPI_Send(&win, 1, MPI_INT, pair, DUEL, MPI_COMM_WORLD);
@@ -236,10 +266,10 @@ void handleDuel(int pair) {
     MPI_Status status;
     MPI_Recv(&win, 1, MPI_INT, pair, 0, MPI_COMM_WORLD, &status);
     if (!win) {
-        debug("Proces %d wygrywa pojedynek i ucieka przed %d", rank, pair);
+        debug("Wygrywam pojedynek i uciekam przed %d", pair);
         wins++;
     } else {
-        debug("Proces %d przegrywa pojedynek", rank);
+        debug("Przegrywam pojedynek");
     }
     changeState(FINISHED);
 }

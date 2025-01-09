@@ -4,12 +4,17 @@
 
 int rank, size;
 int lampotClock = 0;
-int cycles = 0;
-int pistols = 0;
+
+int cycles = 1;
+int pistols = 2;
+
 int wins = 0;
+int readyCount = 0;
 state_t stan=REST;
 pthread_t threadKom, threadMon;
 pthread_mutex_t stateMut = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t lamportMut = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t readyCountMut = PTHREAD_MUTEX_INITIALIZER;
 
 void finalizuj()
 {
@@ -58,12 +63,6 @@ int main(int argc, char **argv)
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     pthread_create( &threadKom, NULL, startKomWatek , 0);
-    
-    printf("Podaj liczbe cykli: ");
-    scanf("%d", &cycles);
-
-    printf("Podaj liczbe pistoletów: ");
-    scanf("%d", &pistols);
 
     // implementacja pętli, która będzie wykonywała się przez określoną liczbę cykli
     for (int i = 0; i < cycles; i++) {
