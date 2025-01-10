@@ -68,6 +68,8 @@ void handleAck();
 /* zwolnienie sekcji krytycznej i wysłanie ACK do procesów w kolejce */
 void releaseAccess();
 
-/* funkcja obsługująca pojedynek - TO-DO */
+/* funkcje obsługujące pojedynek */
 void duel(int pair);
+
+void handleDuel(int pair);
 #endif

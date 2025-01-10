@@ -38,6 +38,8 @@ void mainLoop()
 
     } else { // Ofiara
         changeState(WAIT);
+        handleDuel(pair);
+        changeState(FINISHED);
         // while (stan == WAIT) {
         //     MPI_Status status;
         //     packet_t pkt;

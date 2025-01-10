@@ -271,12 +271,11 @@ void duel(int pair) {
 void handleDuel(int pair) {
     int win;
     MPI_Status status;
-    MPI_Recv(&win, 1, MPI_INT, pair, 0, MPI_COMM_WORLD, &status);
+    MPI_Recv(&win, 1, MPI_INT, pair, DUEL, MPI_COMM_WORLD, &status);
     if (!win) {
         debug("Wygrywam pojedynek i uciekam przed %d", pair);
         wins++;
     } else {
         debug("Przegrywam pojedynek");
     }
-    changeState(FINISHED);
 }
