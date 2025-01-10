@@ -4,7 +4,6 @@ MPI_Datatype MPI_PAKIET_T;
 
 int lamportClock = 0;
 int ackCount = 0;
-//int myTimestamp = -1;
 WaitQueue waitQueue = { .size = 0 }; // Inicjalizacja kolejki
 
 struct tagNames_t{
@@ -66,22 +65,21 @@ void changeState( state_t newState )
 }
 
 void incrementLamportClock() {
-    //pthread_mutex_lock( &lamportMut );
+    pthread_mutex_lock( &lamportMut );
     lamportClock++;
-    //pthread_mutex_unlock( &lamportMut );
+    pthread_mutex_unlock( &lamportMut );
 }
 
 void updateLamportClock(int receivedTs) {
-    //pthread_mutex_lock( &lamportMut );
+    pthread_mutex_lock( &lamportMut );
     lamportClock = (lamportClock > receivedTs ? lamportClock : receivedTs) + 1;
-    //pthread_mutex_unlock( &lamportMut );
+    pthread_mutex_unlock( &lamportMut );
 }
 
 packet_t assignRoleAndPair() {
     changeState(PAIRING);
     srandom(time(NULL) + rank); // Unikalne ziarno generatora
     int localValue = random() % 1000; // Wylosowana wartość
-    int values[size]; // Tablica wartości od wszystkich procesów
     int token[size];  // Token do przesyłania wartości w pierścieniu
 
     if (rank == 0) {
@@ -139,24 +137,35 @@ packet_t assignRoleAndPair() {
         }
     }
 
-    // Zapisanie wartości do tablicy lokalnej
+    // Znalezienie swojej pozycji w posortowanej tablicy
+    int myPosition = -1;
     for (int i = 0; i < size; i++) {
-        values[i] = token[i];
+        if (token[i] == rank) {
+            myPosition = i;
+            break;
+        }
     }
 
-    // Przydzielenie ról i dobór par
+    // Przydzielenie roli i dobór par
     packet_t result;
     int half = size / 2;
-    result.role = (rank < half) ? 1 : 0; // Zabójcy mają najniższe wartości
 
-    if (result.role == 1) { // Zabójcy wybierają ofiary
-        int victimIndex = half + (rank % half); // Wybór ofiary
-        result.pair = victimIndex;
-        debug("Jestem zabójcą i dobieram ofiarę %d", result.pair);
-    } else { // Ofiary czekają na atak
-        result.pair = -1; // Ofiara na razie nie ma przypisanej pary
+    if (myPosition < half) {
+        result.role = 1; // Zabójca
+        result.pair = token[half + (myPosition % half)]; // Dobór ofiary
+        debug("Jestem zabójcą. Dobieram ofiarę %d", result.pair);
+    } else {
+        result.role = 0; // Ofiara
+        result.pair = -1; // Ofiara nie dobiera pary
         debug("Jestem ofiarą");
     }
+
+    // if (rank == 0) {
+    //     debug("Finalna posortowana tablica:");
+    //     for (int i = 0; i < size; i++) {
+    //         debug("[%d] = %d", sortedIndices[i], values[sortedIndices[i]]);
+    //     }
+    // }
 
     return result;
 }
@@ -164,7 +173,6 @@ packet_t assignRoleAndPair() {
 // Wysłanie REQ do wszystkich
 void requestAccess() {
     incrementLamportClock();
-    //myTimestamp = lamportClock;
     ackCount = 0;
 
     packet_t req = {lamportClock, rank};
@@ -234,7 +242,6 @@ void handleAck() {
 
 // Zwolnienie sekcji krytycznej i wysłanie ACK do procesów w kolejce
 void releaseAccess() {
-    //myTimestamp = -1;
     debug("Zwalniam sekcję krytyczną");
 
     // Wysłanie ACK do procesów z kolejki
