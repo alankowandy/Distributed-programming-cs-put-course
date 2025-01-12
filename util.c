@@ -9,7 +9,7 @@ WaitQueue waitQueue = { .size = 0 }; // Inicjalizacja kolejki
 struct tagNames_t{
     const char *name;
     int tag;
-} tagNames[] = { { "pakiet aplikacyjny", APP_PKT }, { "finish", FINISH}};
+} tagNames[] = { { "token do uzupełnienia", INITIAL_TOKEN }, { "uzupełniony token", FINAL_TOKEN}, { "REQ", REQ }, { "ACK", ACK }, { "DUEL", DUEL } };
 
 const char const *tag2string( int tag )
 {
@@ -26,14 +26,15 @@ void inicjuj_typ_pakietu()
        brzydzimy się czymś w rodzaju MPI_Send(&typ, sizeof(pakiet_t), MPI_BYTE....
     */
     /* sklejone z stackoverflow */
-    int       blocklengths[NITEMS] = {1,1,1,1};
-    MPI_Datatype typy[NITEMS] = {MPI_INT, MPI_INT, MPI_INT, MPI_INT};
+    int       blocklengths[NITEMS] = {1,1,1,1,1};
+    MPI_Datatype typy[NITEMS] = {MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT};
 
     MPI_Aint     offsets[NITEMS]; 
     offsets[0] = offsetof(packet_t, ts);
     offsets[1] = offsetof(packet_t, src);
     offsets[2] = offsetof(packet_t, role);
     offsets[3] = offsetof(packet_t, pair);
+    offsets[4] = offsetof(packet_t, token);
 
     MPI_Type_create_struct(NITEMS, blocklengths, offsets, typy, &MPI_PAKIET_T);
 
@@ -81,6 +82,8 @@ packet_t assignRoleAndPair() {
     srandom(time(NULL) + rank); // Unikalne ziarno generatora
     int localValue = random() % 1000; // Wylosowana wartość
     int token[size];  // Token do przesyłania wartości w pierścieniu
+    int tokenReady = 0; // Gotowość tokenu
+    packet_t tokenValues; // Token z wartościami
 
     if (rank == 0) {
         // Proces 0 inicjuje token i zapisuje swoją wartość
@@ -89,51 +92,41 @@ packet_t assignRoleAndPair() {
             token[i] = -1; // Inicjalizacja pustych miejsc
         }
 
+        tokenValues.token = token;
+        incrementLamportClock();
+        tokenValues.ts = lamportClock;
+        tokenValues.src = rank;
         // Przekazanie tokenu do następnego procesu
-        MPI_Send(token, size, MPI_INT, 1, 0, MPI_COMM_WORLD);
+        MPI_Send(tokenValues, 1, MPI_PAKIET_T, 1, INITIAL_TOKEN, MPI_COMM_WORLD);
         debug("Wysłałem token do procesu 1");
 
         // Odbiór finalnego tokenu z wartościami od ostatniego procesu
-        MPI_Recv(token, size, MPI_INT, size - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(tokenValues, 1, MPI_PAKIET_T, size - 1, FINAL_TOKEN, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        updateLamportClock(tokenValues.ts);
         debug("Odebrałem finalny token od procesu %d", size - 1);
 
-        // Sortowanie wartości
-        debug("Sortuję wartości...");
-        for (int i = 0; i < size - 1; i++) {
-            for (int j = i + 1; j < size; j++) {
-                if (token[i] > token[j]) {
-                    int temp = token[i];
-                    token[i] = token[j];
-                    token[j] = temp;
-                }
-            }
-        }
-
-        // Przekazanie posortowanego tokenu do następnego procesu
-        MPI_Send(token, size, MPI_INT, 1, 0, MPI_COMM_WORLD);
+        token = tokenValues.token;
+        incrementLamportClock();
+        tokenValues.ts = lamportClock;
+        tokenValues.src = rank;
+        // Przekazanie wypełnionego tokenu do następnego procesu
+        MPI_Send(tokenValues, 1, MPI_PAKIET_T, 1, INITIAL_TOKEN, MPI_COMM_WORLD);
         debug("Wysłałem posortowany token do procesu 1");
     } else {
-        // Odbiór tokenu od poprzedniego procesu
-        MPI_Recv(token, size, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        debug("Odebrałem token od procesu %d", rank - 1);
+        while (!tokenReady) {
+            sleep(SEC_IN_STATE); // Czekanie na gotowość tokenu
+        }
+    }
 
-        // Dodanie swojej wartości do tokenu
-        token[rank] = localValue;
-        debug("Dodałem swoją wartość %d do tokenu", localValue);
-
-        // Przekazanie tokenu do następnego procesu
-        int nextProcess = (rank + 1) % size;
-        MPI_Send(token, size, MPI_INT, nextProcess, 0, MPI_COMM_WORLD);
-        debug("Wysłałem token do procesu %d", nextProcess);
-
-        // Odbiór posortowanego tokenu od poprzedniego procesu
-        MPI_Recv(token, size, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        debug("Odebrałem posortowany token od procesu %d", rank - 1);
-
-        // Przekazanie posortowanego tokenu do następnego procesu
-        if (rank != size - 1) {
-            MPI_Send(token, size, MPI_INT, nextProcess, 0, MPI_COMM_WORLD);
-            debug("Wysłałem posortowany token do procesu %d", nextProcess);
+    // Sortowanie wartości
+    debug("Sortuję wartości...");
+    for (int i = 0; i < size - 1; i++) {
+        for (int j = i + 1; j < size; j++) {
+            if (token[i] > token[j]) {
+                int temp = token[i];
+                token[i] = token[j];
+                token[j] = temp;
+            }
         }
     }
 

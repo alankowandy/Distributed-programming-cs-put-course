@@ -10,6 +10,7 @@ typedef struct {
     int src;      /* identyfikator nadawcy */
     int role;     /* rola wątku (0 = ofiara, 1 = zabójca) */
     int pair;     /* identyfikator pary */
+    int token;
 } packet_t;
 /* packet_t ma trzy pola, więc NITEMS=4. Wykorzystane w inicjuj_typ_pakietu */
 
@@ -18,12 +19,12 @@ typedef struct {
     int size;
 } WaitQueue;
 
-// TO-DO - lamportClock niepotrzebny?
 extern int lamportClock;   // Zegar Lamporta
 extern int ackCount;       // Licznik zgód
 extern int pistols;        // Liczba pistoletów
-// TO-DO - Czy myTimestamp jest potrzebne?
-//extern int myTimestamp;    // Znacznik czasowy mojego żądania
+extern int localValue;     // Wartość lokalna
+extern int tokenReady;     // Gotowość tokenu
+extern int token[size];    // Token
 extern WaitQueue waitQueue;
 
 #define NITEMS 4
@@ -31,10 +32,11 @@ extern WaitQueue waitQueue;
 /* Typy wiadomości */
 #define APP_PKT 1
 #define FINISH 2
-#define ROLE_ASSIGN 3
-#define REQ 4
-#define ACK 5
-#define DUEL 6
+#define INITIAL_TOKEN 3
+#define FINAL_TOKEN 4
+#define REQ 5
+#define ACK 6
+#define DUEL 7
 
 extern MPI_Datatype MPI_PAKIET_T;
 void inicjuj_typ_pakietu();
