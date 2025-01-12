@@ -7,22 +7,56 @@ void *startKomWatek(void *ptr)
     MPI_Status status;
     int is_message = FALSE;
     packet_t pakiet;
-    /* Obrazuje pętlę odbierającą pakiety o różnych typach */
-    while ( stan!=FINISHED ) {
-        MPI_Recv( &pakiet, 1, MPI_PAKIET_T, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-        updateLamportClock(pakiet.ts);
+    
+    while (stan != FINISHED) {
+        while (stan == REST || stan == PAIRING) {
+            if (rank != 0) {
+                MPI_Recv( &pakiet, 1, MPI_PAKIET_T, rank - 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+                updateLamportClock(pakiet.ts);
 
-        switch (status.MPI_TAG) {
-            case REQ:
-                handleRequest(pakiet.ts, status.MPI_SOURCE);
-                break;
-                // TO-DO - obsługa ACK i RELEASE osobno?
-            case ACK:
-                handleAck();
-                break;
-            case DUEL:
-                handleDuel(pakiet.pair);
-                break;
+                switch (status.MPI_TAG) {
+                    case INITIAL_TOKEN:
+                        debug("Odebrałem token od procesu %d", rank - 1);
+                        // Dodanie swojej wartości do tokenu
+                        pakiet.token[rank] = localValue;
+                        debug("Dodałem swoją wartość %d do tokenu", localValue);
+
+                        // Przekazanie tokenu do następnego procesu
+                        int nextProcess = (rank + 1) % size;
+                        MPI_Send(pakiet, 1, MPI_PAKIET_T, nextProcess, INITIAL_TOKEN, MPI_COMM_WORLD);
+                        debug("Wysłałem token do procesu %d", nextProcess);
+                    break;
+                    case FINAL_TOKEN:
+                        debug("Odebrałem wypełniony token od procesu %d", rank - 1);
+                        token = pakiet.token;
+                        // Przekazanie wypełnionego tokenu do następnego procesu
+                        int nextProcess = (rank + 1) % size;
+                        MPI_Send(pakiet, 1, MPI_PAKIET_T, nextProcess, FINAL_TOKEN, MPI_COMM_WORLD);
+                        debug("Wysłałem wypełniony token do procesu %d", nextProcess);
+                        tokenReady = 1;
+                    break;    
+                }
+            }
+        }
+        
+        while (stan == INSECTION || stan == WAIT) {
+            MPI_Recv( &pakiet, 1, MPI_PAKIET_T, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            updateLamportClock(pakiet.ts);
+
+            switch (status.MPI_TAG) {
+                case REQ:
+                    handleRequest(pakiet.ts, status.MPI_SOURCE);
+                    break;
+                case ACK:
+                    handleAck();
+                    break;
+                case DUEL:
+                    handleDuel(pakiet.pair);
+                    break;
+            }
         }
     }
+    
+
+    
 }

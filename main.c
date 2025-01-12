@@ -9,12 +9,10 @@ int cycles = 1;
 int pistols = 2;
 
 int wins = 0;
-int readyCount = 0;
 state_t stan=REST;
 pthread_t threadKom, threadMon;
 pthread_mutex_t stateMut = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t lamportMut = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t readyCountMut = PTHREAD_MUTEX_INITIALIZER;
 
 void finalizuj()
 {
@@ -70,7 +68,7 @@ int main(int argc, char **argv)
         mainLoop();
     }
 
-    printf("Proces %d zakończył z wynikiem: %d wygrane\n", rank, wins);
+    printf("Zakończyłem z wynikiem: %d wygrane\n", wins);
     
     finalizuj();
     return 0;
