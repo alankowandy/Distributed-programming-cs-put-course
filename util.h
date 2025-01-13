@@ -12,6 +12,7 @@ typedef struct {
     int role;     /* rola wątku (0 = ofiara, 1 = zabójca) */
     int pair;     /* identyfikator pary */
     int token[MAX_SIZE];
+    int win;
 } packet_t;
 /* packet_t ma trzy pola, więc NITEMS=4. Wykorzystane w inicjuj_typ_pakietu */
 
@@ -26,10 +27,12 @@ extern int pistols;        // Liczba pistoletów
 extern int localValue;     // Wartość lokalna
 extern int tokenReady;     // Gotowość tokenu
 extern int localValue;
+extern int token[MAX_SIZE];
+extern int wins;
 
 extern WaitQueue waitQueue;
 
-#define NITEMS 5
+#define NITEMS 6
 
 /* Typy wiadomości */
 #define APP_PKT 1
@@ -75,5 +78,7 @@ void releaseAccess();
 /* funkcje obsługujące pojedynek */
 void duel(int pair);
 
-void handleDuel(int pair);
+void handleDuel(int pair, int win);
+
+void sleepThread(int milliseconds);
 #endif

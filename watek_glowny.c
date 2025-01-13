@@ -9,28 +9,35 @@ void mainLoop()
     int role = rolePair.role;
     int pair = rolePair.pair;
 
+    changeState(WAIT);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
     if (role == 1) { // Zabójca
         requestAccess();
 
         while (ackCount < size - pistols) {
-            sleep(SEC_IN_STATE); // Proces czeka dopoki nie uzyska odpowiedniej ilosci ACK
+            sleepThread(1000); // Proces czeka dopoki nie uzyska odpowiedniej ilosci ACK
         }
 
         changeState(INSECTION);
-        debug("Atakuje proces %d", pair);
-        //sendPacket(NULL, pair, DUEL);
+        debug("Wchodzę do sekcji krytycznej");
         duel(pair);
 
         releaseAccess();
-        changeState(FINISHED);
+        //changeState(FINISHED);
 
     } else { // Ofiara
-        changeState(WAIT);
-        handleDuel(pair);
-        changeState(FINISHED);
+        //changeState(WAIT);
+        //debug("wchodzę tu gdzie ofiara powinna");
     }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    changeState(FINISHED);
     
-    while (stan != FINISHED) {
-        sleep(SEC_IN_STATE);
-    }
+    // while (stan != FINISHED) {
+    //     sleepThread(1000);
+    //     //sleep(SEC_IN_STATE);
+    // }
 }

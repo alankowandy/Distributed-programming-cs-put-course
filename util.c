@@ -5,6 +5,7 @@ MPI_Datatype MPI_PAKIET_T;
 int lamportClock = 0;
 int ackCount = 0;
 int pairValue = 0;
+int token[MAX_SIZE];
 WaitQueue waitQueue = { .size = 0 }; // Inicjalizacja kolejki
 
 struct tagNames_t{
@@ -27,8 +28,8 @@ void inicjuj_typ_pakietu()
        brzydzimy się czymś w rodzaju MPI_Send(&typ, sizeof(pakiet_t), MPI_BYTE....
     */
     /* sklejone z stackoverflow */
-    int       blocklengths[NITEMS] = {1,1,1,1,MAX_SIZE};
-    MPI_Datatype typy[NITEMS] = {MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT};
+    int       blocklengths[NITEMS] = {1,1,1,1,MAX_SIZE,1};
+    MPI_Datatype typy[NITEMS] = {MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT};
 
     MPI_Aint     offsets[NITEMS]; 
     offsets[0] = offsetof(packet_t, ts);
@@ -36,6 +37,7 @@ void inicjuj_typ_pakietu()
     offsets[2] = offsetof(packet_t, role);
     offsets[3] = offsetof(packet_t, pair);
     offsets[4] = offsetof(packet_t, token);
+    offsets[5] = offsetof(packet_t, win);
 
     MPI_Type_create_struct(NITEMS, blocklengths, offsets, typy, &MPI_PAKIET_T);
 
@@ -82,8 +84,6 @@ packet_t assignRoleAndPair() {
     changeState(PAIRING);
     srandom(time(NULL) + rank); // Unikalne ziarno generatora
     localValue = random() % 1000; // Wylosowana wartość
-    int token[MAX_SIZE];  // Token do przesyłania wartości w pierścieniu
-    //int tokenReady = 0; // Gotowość tokenu
     packet_t tokenValues; // Token z wartościami
 
     if (rank == 0) {
@@ -93,12 +93,7 @@ packet_t assignRoleAndPair() {
             token[i] = 0; // Inicjalizacja pustych miejsc
         }
 
-        for (int i = 0; i < size; i++) {
-            debug("[%d] = %d", i, token[i]);
-        }
-
         memcpy(tokenValues.token, token, MAX_SIZE * sizeof(int));
-        //tokenValues.token = token;
         incrementLamportClock();
         tokenValues.ts = lamportClock;
         tokenValues.src = rank;
@@ -115,16 +110,19 @@ packet_t assignRoleAndPair() {
         incrementLamportClock();
         tokenValues.ts = lamportClock;
         tokenValues.src = rank;
-        for (int i = 0; i < size; i++) {
-            debug("[%d] = %d", i, token[i]);
-        }
         // Przekazanie wypełnionego tokenu do następnego procesu
         MPI_Send(&tokenValues, 1, MPI_PAKIET_T, 1, FINAL_TOKEN, MPI_COMM_WORLD);
-        debug("Wysłałem posortowany token do procesu 1");
+        debug("Wysłałem wypełniony token do procesu 1");
     } else {
         while (!tokenReady) {
-            sleep(SEC_IN_STATE); // Czekanie na gotowość tokenu
-        }
+            sleepThread(1000); // Czekanie na gotowość tokenu
+        }     
+    }
+
+    changeState(WAIT);
+
+    if (rank != 0) {
+        memcpy(tokenValues.token, token, MAX_SIZE * sizeof(int));
     }
 
     // Sortowanie wartości
@@ -142,7 +140,7 @@ packet_t assignRoleAndPair() {
     // Znalezienie swojej pozycji w posortowanej tablicy
     int myPosition = -1;
     for (int i = 0; i < size; i++) {
-        if (token[i] == rank) {
+        if (token[i] == localValue) {
             myPosition = i;
             break;
         }
@@ -156,24 +154,23 @@ packet_t assignRoleAndPair() {
         result.role = 1; // Zabójca
         pairValue = token[half + (myPosition % half)];
         for (int i = 0; i < size; i++) {
-            if (tokenValues[i] == pairValue) {
+            if (tokenValues.token[i] == pairValue) {
                 result.pair = i;
             }
         }
-        //result.pair = token[half + (myPosition % half)]; // Dobór ofiary
-        debug("Jestem zabójcą. Dobieram ofiarę %d", result.pair);
+        debug("Jestem zabójcą. Dobieram ofiarę - proces %d", result.pair);
     } else {
         result.role = 0; // Ofiara
         result.pair = -1; // Ofiara nie dobiera pary
         debug("Jestem ofiarą");
     }
 
-    // if (rank == 0) {
-    //     debug("Finalna posortowana tablica:");
-    //     for (int i = 0; i < size; i++) {
-    //         debug("[%d] = %d", sortedIndices[i], values[sortedIndices[i]]);
-    //     }
-    // }
+    if (rank == 0) {
+        debug("Finalna posortowana tablica:");
+        for (int i = 0; i < size; i++) {
+            debug("[%d] = %d", i, token[i]);
+        }
+    }
 
     return result;
 }
@@ -189,8 +186,6 @@ void requestAccess() {
             sendPacket(&req, i, REQ);
         }
     }
-    debug("Wysłałem REQ");
-    changeState(WAIT);
 }
 
 int comparePriority(packet_t a, packet_t b) {
@@ -201,6 +196,7 @@ int comparePriority(packet_t a, packet_t b) {
 
 /* dodanie procesu do kolejki oczekujących na dostęp */
 void addToWaitQueue(int ts, int src) {
+    debug("blokuje sie XDDDDDD");
     if (waitQueue.size < 100) {
         packet_t pkt = { .ts = ts, .src = src };
 
@@ -235,7 +231,7 @@ void handleRequest(int ts, int src) {
     if (ts < lamportClock || (ts == lamportClock && src < rank)) {
         packet_t ack = {lamportClock, rank};
         sendPacket(&ack, src, ACK);
-        debug("Wysłałem ACK do %d", src);
+        //debug("Wysłałem ACK do %d", src);
     } else { // jeśli moje żądanie ma większy priorytet to dodaje do kolejki oczekujacych
         addToWaitQueue(ts, src);
         debug("Dodałem %d do kolejki oczekujących", src);
@@ -263,27 +259,49 @@ void releaseAccess() {
 
 // TO-DO
 void duel(int pair) {
-    int perc = random()%100;
-    int win;
-    if (perc > 50) {
-        win = 1;
-        MPI_Send(&win, 1, MPI_INT, pair, DUEL, MPI_COMM_WORLD);
+    packet_t pkt;
+    int perc = random()%1000;
+    debug("Atakuje proces %d", pair);
+    if (perc > 500) {
+        pkt.win = 1;
+        pkt.pair = pair;
+        sendPacket(&pkt, pair, DUEL);
+        //MPI_Send(&win, 1, MPI_INT, pair, DUEL, MPI_COMM_WORLD);
         wins++;
         debug("Wygrywam pojedynek i zabijam %d", pair);
     } else {
-        win = 0;
-        MPI_Send(&win, 1, MPI_INT, pair, DUEL, MPI_COMM_WORLD);
+        pkt.win = 1;
+        pkt.pair = pair;
+        sendPacket(&pkt, pair, DUEL);
+        debug("Przegrywam pojedynek");
+        //MPI_Send(&win, 1, MPI_INT, pair, DUEL, MPI_COMM_WORLD);
     }
 }
 
-void handleDuel(int pair) {
-    int win;
-    MPI_Status status;
-    MPI_Recv(&win, 1, MPI_INT, pair, DUEL, MPI_COMM_WORLD, &status);
+void handleDuel(int pair, int win) {
+    //int win;
+    //MPI_Status status;
+    //MPI_Recv(&win, 1, MPI_INT, pair, DUEL, MPI_COMM_WORLD, &status);
     if (!win) {
         debug("Wygrywam pojedynek i uciekam przed %d", pair);
         wins++;
     } else {
         debug("Przegrywam pojedynek");
     }
+    changeState(FINISHED);
+}
+
+void sleepThread(int milliseconds) {
+    pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+    pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+
+    ts.tv_sec += milliseconds / 1000;
+    ts.tv_nsec += (milliseconds % 1000) * 1000000;
+
+    pthread_mutex_lock(&mutex);
+    pthread_cond_timedwait(&cond, &mutex, &ts);
+    pthread_mutex_unlock(&mutex);
 }

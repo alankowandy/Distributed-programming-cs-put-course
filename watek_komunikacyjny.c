@@ -18,16 +18,9 @@ void *startKomWatek(void *ptr)
                 switch (status.MPI_TAG) {
                     case INITIAL_TOKEN:
                         debug("Odebrałem token od procesu %d", rank - 1);
-                        for (int i = 0; i < size; i++) {
-                            debug("[%d] = %d", i, pakiet.token[i]);
-                        }
                         // Dodanie swojej wartości do tokenu
                         pakiet.token[rank] = localValue;
                         debug("Dodałem swoją wartość %d do tokenu", localValue);
-                        for (int i = 0; i < size; i++) {
-                            debug("[%d] = %d", i, pakiet.token[i]);
-                        }
-
                         // Przekazanie tokenu do następnego procesu
                         incrementLamportClock();
                         pakiet.ts = lamportClock;
@@ -37,7 +30,6 @@ void *startKomWatek(void *ptr)
                     break;
                     case FINAL_TOKEN:
                         debug("Odebrałem wypełniony token od procesu %d", rank - 1);
-                        //token = pakiet.token;
                         // Przekazanie wypełnionego tokenu do następnego procesu
                         incrementLamportClock();
                         pakiet.ts = lamportClock;
@@ -46,13 +38,14 @@ void *startKomWatek(void *ptr)
                             MPI_Send(&pakiet, 1, MPI_PAKIET_T, nextProcess, FINAL_TOKEN, MPI_COMM_WORLD);
                             debug("Wysłałem wypełniony token do procesu %d", nextProcess);
                         }
+                        memcpy(token, pakiet.token, MAX_SIZE * sizeof(int));
                         tokenReady = 1;
                     break;    
                 }
             }
         }
         
-        while (stan == INSECTION || stan == WAIT) {
+        while (stan == WAIT || stan == INSECTION) {
             MPI_Recv( &pakiet, 1, MPI_PAKIET_T, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
             updateLamportClock(pakiet.ts);
 
@@ -64,12 +57,9 @@ void *startKomWatek(void *ptr)
                     handleAck();
                     break;
                 case DUEL:
-                    handleDuel(pakiet.pair);
+                    handleDuel(pakiet.pair, pakiet.win);
                     break;
             }
         }
     }
-    
-
-    
 }

@@ -5,7 +5,7 @@
 int rank, size, localValue;
 int lampotClock = 0;
 
-int cycles = 1;
+int cycles = 3;
 int pistols = 2;
 
 //int *token;
@@ -72,7 +72,9 @@ int main(int argc, char **argv)
         mainLoop();
     }
 
-    printf("Zakończyłem z wynikiem: %d wygrane\n", wins);
+    debug("Zakończyłem z wynikiem: %d wygrane\n", wins);
+
+    //printf("Zakończyłem z wynikiem: %d wygrane\n", wins);
     
     finalizuj();
     return 0;
