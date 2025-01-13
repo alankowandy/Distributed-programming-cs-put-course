@@ -7,6 +7,7 @@ void *startKomWatek(void *ptr)
     MPI_Status status;
     int is_message = FALSE;
     packet_t pakiet;
+    int nextProcess = (rank + 1) % size;
     
     while (stan != FINISHED) {
         while (stan == REST || stan == PAIRING) {
@@ -17,22 +18,34 @@ void *startKomWatek(void *ptr)
                 switch (status.MPI_TAG) {
                     case INITIAL_TOKEN:
                         debug("Odebrałem token od procesu %d", rank - 1);
+                        for (int i = 0; i < size; i++) {
+                            debug("[%d] = %d", i, pakiet.token[i]);
+                        }
                         // Dodanie swojej wartości do tokenu
                         pakiet.token[rank] = localValue;
                         debug("Dodałem swoją wartość %d do tokenu", localValue);
+                        for (int i = 0; i < size; i++) {
+                            debug("[%d] = %d", i, pakiet.token[i]);
+                        }
 
                         // Przekazanie tokenu do następnego procesu
-                        int nextProcess = (rank + 1) % size;
-                        MPI_Send(pakiet, 1, MPI_PAKIET_T, nextProcess, INITIAL_TOKEN, MPI_COMM_WORLD);
+                        incrementLamportClock();
+                        pakiet.ts = lamportClock;
+                        pakiet.src = rank;
+                        MPI_Send(&pakiet, 1, MPI_PAKIET_T, nextProcess, INITIAL_TOKEN, MPI_COMM_WORLD);
                         debug("Wysłałem token do procesu %d", nextProcess);
                     break;
                     case FINAL_TOKEN:
                         debug("Odebrałem wypełniony token od procesu %d", rank - 1);
-                        token = pakiet.token;
+                        //token = pakiet.token;
                         // Przekazanie wypełnionego tokenu do następnego procesu
-                        int nextProcess = (rank + 1) % size;
-                        MPI_Send(pakiet, 1, MPI_PAKIET_T, nextProcess, FINAL_TOKEN, MPI_COMM_WORLD);
-                        debug("Wysłałem wypełniony token do procesu %d", nextProcess);
+                        incrementLamportClock();
+                        pakiet.ts = lamportClock;
+                        pakiet.src = rank;
+                        if (rank != size - 1) {
+                            MPI_Send(&pakiet, 1, MPI_PAKIET_T, nextProcess, FINAL_TOKEN, MPI_COMM_WORLD);
+                            debug("Wysłałem wypełniony token do procesu %d", nextProcess);
+                        }
                         tokenReady = 1;
                     break;    
                 }

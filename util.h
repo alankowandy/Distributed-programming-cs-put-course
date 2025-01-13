@@ -3,6 +3,7 @@
 #include "main.h"
 
 #define MAX_QUEUE 20
+#define MAX_SIZE 20
 
 /* typ pakietu */
 typedef struct {
@@ -10,7 +11,7 @@ typedef struct {
     int src;      /* identyfikator nadawcy */
     int role;     /* rola wątku (0 = ofiara, 1 = zabójca) */
     int pair;     /* identyfikator pary */
-    int token;
+    int token[MAX_SIZE];
 } packet_t;
 /* packet_t ma trzy pola, więc NITEMS=4. Wykorzystane w inicjuj_typ_pakietu */
 
@@ -24,10 +25,11 @@ extern int ackCount;       // Licznik zgód
 extern int pistols;        // Liczba pistoletów
 extern int localValue;     // Wartość lokalna
 extern int tokenReady;     // Gotowość tokenu
-extern int token[size];    // Token
+extern int localValue;
+
 extern WaitQueue waitQueue;
 
-#define NITEMS 4
+#define NITEMS 5
 
 /* Typy wiadomości */
 #define APP_PKT 1

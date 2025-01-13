@@ -22,6 +22,8 @@ extern int size;
 extern int lamportClock;
 extern int pistols;
 extern int wins;
+extern int localValue;
+extern int tokenReady;
 typedef enum {REST, WAIT, PAIRING, INSECTION, FINISHED} state_t;
 extern state_t stan;
 extern pthread_t threadKom, threadMon;

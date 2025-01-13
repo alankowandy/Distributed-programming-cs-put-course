@@ -4,6 +4,7 @@ MPI_Datatype MPI_PAKIET_T;
 
 int lamportClock = 0;
 int ackCount = 0;
+int pairValue = 0;
 WaitQueue waitQueue = { .size = 0 }; // Inicjalizacja kolejki
 
 struct tagNames_t{
@@ -26,7 +27,7 @@ void inicjuj_typ_pakietu()
        brzydzimy się czymś w rodzaju MPI_Send(&typ, sizeof(pakiet_t), MPI_BYTE....
     */
     /* sklejone z stackoverflow */
-    int       blocklengths[NITEMS] = {1,1,1,1,1};
+    int       blocklengths[NITEMS] = {1,1,1,1,MAX_SIZE};
     MPI_Datatype typy[NITEMS] = {MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT};
 
     MPI_Aint     offsets[NITEMS]; 
@@ -80,37 +81,45 @@ void updateLamportClock(int receivedTs) {
 packet_t assignRoleAndPair() {
     changeState(PAIRING);
     srandom(time(NULL) + rank); // Unikalne ziarno generatora
-    int localValue = random() % 1000; // Wylosowana wartość
-    int token[size];  // Token do przesyłania wartości w pierścieniu
-    int tokenReady = 0; // Gotowość tokenu
+    localValue = random() % 1000; // Wylosowana wartość
+    int token[MAX_SIZE];  // Token do przesyłania wartości w pierścieniu
+    //int tokenReady = 0; // Gotowość tokenu
     packet_t tokenValues; // Token z wartościami
 
     if (rank == 0) {
         // Proces 0 inicjuje token i zapisuje swoją wartość
         token[0] = localValue;
         for (int i = 1; i < size; i++) {
-            token[i] = -1; // Inicjalizacja pustych miejsc
+            token[i] = 0; // Inicjalizacja pustych miejsc
         }
 
-        tokenValues.token = token;
+        for (int i = 0; i < size; i++) {
+            debug("[%d] = %d", i, token[i]);
+        }
+
+        memcpy(tokenValues.token, token, MAX_SIZE * sizeof(int));
+        //tokenValues.token = token;
         incrementLamportClock();
         tokenValues.ts = lamportClock;
         tokenValues.src = rank;
         // Przekazanie tokenu do następnego procesu
-        MPI_Send(tokenValues, 1, MPI_PAKIET_T, 1, INITIAL_TOKEN, MPI_COMM_WORLD);
+        MPI_Send(&tokenValues, 1, MPI_PAKIET_T, 1, INITIAL_TOKEN, MPI_COMM_WORLD);
         debug("Wysłałem token do procesu 1");
 
         // Odbiór finalnego tokenu z wartościami od ostatniego procesu
-        MPI_Recv(tokenValues, 1, MPI_PAKIET_T, size - 1, FINAL_TOKEN, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&tokenValues, 1, MPI_PAKIET_T, size - 1, INITIAL_TOKEN, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         updateLamportClock(tokenValues.ts);
         debug("Odebrałem finalny token od procesu %d", size - 1);
 
-        token = tokenValues.token;
+        memcpy(token, tokenValues.token, MAX_SIZE * sizeof(int));
         incrementLamportClock();
         tokenValues.ts = lamportClock;
         tokenValues.src = rank;
+        for (int i = 0; i < size; i++) {
+            debug("[%d] = %d", i, token[i]);
+        }
         // Przekazanie wypełnionego tokenu do następnego procesu
-        MPI_Send(tokenValues, 1, MPI_PAKIET_T, 1, INITIAL_TOKEN, MPI_COMM_WORLD);
+        MPI_Send(&tokenValues, 1, MPI_PAKIET_T, 1, FINAL_TOKEN, MPI_COMM_WORLD);
         debug("Wysłałem posortowany token do procesu 1");
     } else {
         while (!tokenReady) {
@@ -145,7 +154,13 @@ packet_t assignRoleAndPair() {
 
     if (myPosition < half) {
         result.role = 1; // Zabójca
-        result.pair = token[half + (myPosition % half)]; // Dobór ofiary
+        pairValue = token[half + (myPosition % half)];
+        for (int i = 0; i < size; i++) {
+            if (tokenValues[i] == pairValue) {
+                result.pair = i;
+            }
+        }
+        //result.pair = token[half + (myPosition % half)]; // Dobór ofiary
         debug("Jestem zabójcą. Dobieram ofiarę %d", result.pair);
     } else {
         result.role = 0; // Ofiara

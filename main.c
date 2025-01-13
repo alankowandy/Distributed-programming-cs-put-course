@@ -2,11 +2,15 @@
 #include "watek_glowny.h"
 #include "watek_komunikacyjny.h"
 
-int rank, size;
+int rank, size, localValue;
 int lampotClock = 0;
 
 int cycles = 1;
 int pistols = 2;
+
+//int *token;
+
+int tokenReady = 0; // Gotowość tokenu
 
 int wins = 0;
 state_t stan=REST;

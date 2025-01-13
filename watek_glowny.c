@@ -14,18 +14,6 @@ void mainLoop()
 
         while (ackCount < size - pistols) {
             sleep(SEC_IN_STATE); // Proces czeka dopoki nie uzyska odpowiedniej ilosci ACK
-            // MPI_Status status;
-            // packet_t pkt;
-            // MPI_Recv(&pkt, 1, MPI_PAKIET_T, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-
-            // switch (status.MPI_TAG) {
-            //     case REQ:
-            //         handleRequest(pkt.ts, status.MPI_SOURCE);
-            //         break;
-            //     case ACK:
-            //         handleAck();
-            //         break;
-            // }
         }
 
         changeState(INSECTION);
@@ -40,20 +28,6 @@ void mainLoop()
         changeState(WAIT);
         handleDuel(pair);
         changeState(FINISHED);
-        // while (stan == WAIT) {
-        //     MPI_Status status;
-        //     packet_t pkt;
-        //     MPI_Recv(&pkt, 1, MPI_PAKIET_T, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-
-        //     // switch (status.MPI_TAG) {
-        //     //     case REQ:
-        //     //         handleRequest(pkt.ts, status.MPI_SOURCE);
-        //     //         break;
-        //     //     case DUEL:
-        //     //         handleDuel(pair);
-        //     //         break;
-        //     // }
-        // }
     }
     
     while (stan != FINISHED) {
