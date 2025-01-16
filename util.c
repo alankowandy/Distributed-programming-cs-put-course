@@ -3,10 +3,20 @@
 MPI_Datatype MPI_PAKIET_T;
 
 int lamportClock = 0;
-int ackCount = 0;
 int pairValue = 0;
 int token[MAX_SIZE];
+int oldAckCount;
+int killers[MAX_SIZE / 2];
+int sentPacketsCount = 0;
+struct SentPacketLog sentPacketsLog[MAX_LOG_SIZE];
+
+packet_t messageQueue[QUEUE_SIZE];
+int queueStart = 0, queueEnd = 0;
+
 WaitQueue waitQueue = { .size = 0 }; // Inicjalizacja kolejki
+
+int ackLogCount = 0;
+int ackLog[MAX_ACK_LOG_SIZE];
 
 struct tagNames_t{
     const char *name;
@@ -52,6 +62,16 @@ void sendPacket(packet_t *pkt, int destination, int tag)
     incrementLamportClock();
     pkt->ts = lamportClock;
     pkt->src = rank;
+
+    if (sentPacketsCount < MAX_LOG_SIZE) { // Założenie: MAX_LOG_SIZE to maksymalny rozmiar tablicy
+        sentPacketsLog[sentPacketsCount].destination = destination;
+        sentPacketsLog[sentPacketsCount].tag = tag;
+        sentPacketsLog[sentPacketsCount].lamportClock = lamportClock;
+        sentPacketsCount++;
+    } else {
+        debug("Tablica logów wysyłanych pakietów jest pełna!\n");
+    }
+
     MPI_Send( pkt, 1, MPI_PAKIET_T, destination, tag, MPI_COMM_WORLD);
     debug("Wysyłam %s do %d\n", tag2string( tag), destination);
     if (freepkt) free(pkt);
@@ -115,18 +135,18 @@ packet_t assignRoleAndPair() {
         debug("Wysłałem wypełniony token do procesu 1");
     } else {
         while (!tokenReady) {
-            sleepThread(1000); // Czekanie na gotowość tokenu
+            sleepThread(500); // Czekanie na gotowość tokenu
         }     
     }
 
-    changeState(WAIT);
+    //changeState(WAIT);
 
     if (rank != 0) {
         memcpy(tokenValues.token, token, MAX_SIZE * sizeof(int));
     }
 
     // Sortowanie wartości
-    debug("Sortuję wartości...");
+    //debug("Sortuję wartości...");
     for (int i = 0; i < size - 1; i++) {
         for (int j = i + 1; j < size; j++) {
             if (token[i] > token[j]) {
@@ -172,20 +192,75 @@ packet_t assignRoleAndPair() {
         }
     }
 
+    int killerCount = 0; // Licznik zabójców
+    //int killers[size / 2];      // Tablica przechowująca ranki zabójców
+
+    // Przejdź przez posortowaną tablicę token
+    for (int i = 0; i < size / 2; i++) { // Pierwsza połowa to zabójcy
+        for (int j = 0; j < size; j++) { // Znajdź rank dla wartości token[i]
+            if (token[i] == tokenValues.token[j]) {
+                killers[killerCount] = j;          // Rank zabójcy
+                killerCount++;
+                break;
+            }
+        }
+    }
+
+    // Wyświetlenie danych o zabójcach
+    debug("Lista zabójców:");
+    for (int i = 0; i < killerCount; i++) {
+        debug("Zabójca %d: Proces %d", i + 1, killers[i]);
+    }
+
     return result;
 }
 
 // Wysłanie REQ do wszystkich
 void requestAccess() {
-    incrementLamportClock();
-    ackCount = 0;
+    changeState(INWANT);
+    int killerCount = size / 2;
 
     packet_t req = {lamportClock, rank};
-    for (int i = 0; i < size; i++) {
-        if (i != rank) {
-            sendPacket(&req, i, REQ);
+
+    for (int i = 0; i < killerCount; i++) {
+        if (killers[i] != rank) { // Nie wysyłaj do siebie
+            sendPacket(&req, killers[i], REQ);
+            //debug("Zabójca %d (rank %d) wysłał wiadomość do zabójcy %d", rank, rank, killers[i]);
         }
     }
+
+    // for (int i = 0; i < killerCount; i++) {
+    //     if (killers[i] == rank) {
+    //         int nextKiller = killers[(i + 1) % killerCount]; // Następny zabójca
+    //         int prevKiller = killers[(i - 1 + killerCount) % killerCount]; // Poprzedni zabójca
+
+    //         if (i % 2 == 0) {
+    //             sendPacket(&req, nextKiller, REQ);
+    //         }
+    //     }
+    // }
+
+    // for (int i = 0; i < killerCount; i++) {
+    //     if (killers[i] == rank) {
+    //         int nextKiller = killers[(i + 1) % killerCount]; // Następny zabójca
+    //         int prevKiller = killers[(i - 1 + killerCount) % killerCount]; // Poprzedni zabójca
+
+    //         if (i % 2 != 0) {
+    //             sendPacket(&req, nextKiller, REQ);
+    //         }
+    //     }
+    // }
+
+    // for (int i = 0; i < size/2; i++) {
+    //     oldAckCount = ackCount; 
+    //     if (i != killers[i] && i+1 < size/2) {
+    //         sendPacket(&req, killers[i+1], REQ);
+            
+    //     }
+    //     // if (oldAckCount == ackCount && i != rank) {
+    //     //     sleepThread(1500);
+    //     // }
+    // }
 }
 
 int comparePriority(packet_t a, packet_t b) {
@@ -196,7 +271,6 @@ int comparePriority(packet_t a, packet_t b) {
 
 /* dodanie procesu do kolejki oczekujących na dostęp */
 void addToWaitQueue(int ts, int src) {
-    debug("blokuje sie XDDDDDD");
     if (waitQueue.size < 100) {
         packet_t pkt = { .ts = ts, .src = src };
 
@@ -224,11 +298,12 @@ void addToWaitQueue(int ts, int src) {
 
 // Obsługa otrzymanego REQ
 void handleRequest(int ts, int src) {
-    updateLamportClock(ts);
-    debug("Otrzymałem REQ od %d", src);
+    //updateLamportClock(ts);
+    //debug("Otrzymałem REQ od %d", src);
 
     // jeśli moje żądanie ma niższy priorytet to wysyłam ACK
     if (ts < lamportClock || (ts == lamportClock && src < rank)) {
+        updateLamportClock(ts);
         packet_t ack = {lamportClock, rank};
         sendPacket(&ack, src, ACK);
         //debug("Wysłałem ACK do %d", src);
@@ -239,9 +314,19 @@ void handleRequest(int ts, int src) {
 }
 
 // Obsługa otrzymanego ACK
-void handleAck() {
+void handleAck(int src) {
+    pthread_mutex_lock(&ackCountMut);
     ackCount++;
     debug("Otrzymałem ACK (ackCount=%d)", ackCount);
+    pthread_cond_signal(&ackCond); // Powiadomienie wątku głównego
+    pthread_mutex_unlock(&ackCountMut);
+
+    if (ackLogCount < MAX_ACK_LOG_SIZE) {
+        ackLog[ackLogCount] = src; // Zapis ID procesu, od którego otrzymano ACK
+        ackLogCount++;
+    } else {
+        debug("Tablica ackLog jest pełna! Nie można zapisać procesu %d", src);
+    }
 }
 
 // Zwolnienie sekcji krytycznej i wysłanie ACK do procesów w kolejce
@@ -255,9 +340,9 @@ void releaseAccess() {
         debug("Wysłałem ACK do %d z kolejki", waitQueue.queue[i].src);
     }
     waitQueue.size = 0;
+    ackCount = 0;
 }
 
-// TO-DO
 void duel(int pair) {
     packet_t pkt;
     int perc = random()%1000;
@@ -266,24 +351,20 @@ void duel(int pair) {
         pkt.win = 1;
         pkt.pair = pair;
         sendPacket(&pkt, pair, DUEL);
-        //MPI_Send(&win, 1, MPI_INT, pair, DUEL, MPI_COMM_WORLD);
         wins++;
-        debug("Wygrywam pojedynek i zabijam %d", pair);
+        debug("Wygrywam pojedynek i zabijam proces %d", pair);
     } else {
-        pkt.win = 1;
+        pkt.win = 0;
         pkt.pair = pair;
         sendPacket(&pkt, pair, DUEL);
         debug("Przegrywam pojedynek");
-        //MPI_Send(&win, 1, MPI_INT, pair, DUEL, MPI_COMM_WORLD);
     }
+    sendPacket(&pkt, rank, RELEASE);
 }
 
 void handleDuel(int pair, int win) {
-    //int win;
-    //MPI_Status status;
-    //MPI_Recv(&win, 1, MPI_INT, pair, DUEL, MPI_COMM_WORLD, &status);
     if (!win) {
-        debug("Wygrywam pojedynek i uciekam przed %d", pair);
+        debug("Wygrywam pojedynek i uciekam przed procesem %d", pair);
         wins++;
     } else {
         debug("Przegrywam pojedynek");
@@ -304,4 +385,24 @@ void sleepThread(int milliseconds) {
     pthread_mutex_lock(&mutex);
     pthread_cond_timedwait(&cond, &mutex, &ts);
     pthread_mutex_unlock(&mutex);
+}
+
+// Dodanie wiadomości do kolejki
+void enqueueMessage(packet_t *pakiet) {
+    if ((queueEnd + 1) % QUEUE_SIZE == queueStart) {
+        fprintf(stderr, "Kolejka wiadomości jest pełna!\n");
+        return;
+    }
+    messageQueue[queueEnd] = *pakiet;
+    queueEnd = (queueEnd + 1) % QUEUE_SIZE;
+}
+
+// Pobranie wiadomości z kolejki
+int dequeueMessage(packet_t *pakiet) {
+    if (queueStart == queueEnd) {
+        return 0; // Kolejka jest pusta
+    }
+    *pakiet = messageQueue[queueStart];
+    queueStart = (queueStart + 1) % QUEUE_SIZE;
+    return 1; // Sukces
 }

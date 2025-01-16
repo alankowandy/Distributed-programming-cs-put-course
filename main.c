@@ -2,8 +2,9 @@
 #include "watek_glowny.h"
 #include "watek_komunikacyjny.h"
 
-int rank, size, localValue;
+int rank, size, localValue, role;
 int lampotClock = 0;
+int ackCount = 0;
 
 int cycles = 3;
 int pistols = 2;
@@ -17,6 +18,8 @@ state_t stan=REST;
 pthread_t threadKom, threadMon;
 pthread_mutex_t stateMut = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t lamportMut = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t ackCountMut = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t ackCond = PTHREAD_COND_INITIALIZER;
 
 void finalizuj()
 {
@@ -74,6 +77,7 @@ int main(int argc, char **argv)
 
     debug("Zakończyłem z wynikiem: %d wygrane\n", wins);
 
+    changeState(FINISHED);
     //printf("Zakończyłem z wynikiem: %d wygrane\n", wins);
     
     finalizuj();

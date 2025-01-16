@@ -4,6 +4,9 @@
 
 #define MAX_QUEUE 20
 #define MAX_SIZE 20
+#define QUEUE_SIZE 100
+#define MAX_LOG_SIZE 100
+#define MAX_ACK_LOG_SIZE 20
 
 /* typ pakietu */
 typedef struct {
@@ -21,14 +24,29 @@ typedef struct {
     int size;
 } WaitQueue;
 
-extern int lamportClock;   // Zegar Lamporta
-extern int ackCount;       // Licznik zgód
-extern int pistols;        // Liczba pistoletów
-extern int localValue;     // Wartość lokalna
-extern int tokenReady;     // Gotowość tokenu
+//extern int lamportClock;   // Zegar Lamporta
+//extern int ackCount;       // Licznik zgód
+//extern int pistols;        // Liczba pistoletów
+//extern int localValue;     // Wartość lokalna
+//extern int tokenReady;     // Gotowość tokenu
 extern int localValue;
 extern int token[MAX_SIZE];
 extern int wins;
+extern int killers[MAX_SIZE / 2];
+
+extern int sentPacketsCount; // Liczba zapisanych wpisów
+struct SentPacketLog {
+    int destination;
+    int tag;
+    int lamportClock;
+};
+extern struct SentPacketLog sentPacketsLog[MAX_LOG_SIZE];
+
+// Tablica przechowująca identyfikatory procesów, od których otrzymano ACK
+extern int ackLog[MAX_ACK_LOG_SIZE];
+// Licznik zapisanych wpisów w tablicy ackLog
+extern int ackLogCount;
+
 
 extern WaitQueue waitQueue;
 
@@ -70,7 +88,7 @@ void addToWaitQueue(int ts, int src);
 void handleRequest(int ts, int src);
 
 /* obsługa otrzymanego ACK od procesu */
-void handleAck();
+void handleAck(int src);
 
 /* zwolnienie sekcji krytycznej i wysłanie ACK do procesów w kolejce */
 void releaseAccess();
@@ -81,4 +99,8 @@ void duel(int pair);
 void handleDuel(int pair, int win);
 
 void sleepThread(int milliseconds);
+
+void enqueueMessage(packet_t *pakiet);
+
+int dequeueMessage(packet_t *pakiet);
 #endif
