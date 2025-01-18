@@ -24,23 +24,25 @@ typedef struct {
     int size;
 } WaitQueue;
 
-//extern int lamportClock;   // Zegar Lamporta
-//extern int ackCount;       // Licznik zgód
-//extern int pistols;        // Liczba pistoletów
-//extern int localValue;     // Wartość lokalna
-//extern int tokenReady;     // Gotowość tokenu
 extern int localValue;
 extern int token[MAX_SIZE];
-extern int wins;
 extern int killers[MAX_SIZE / 2];
+extern int release;
 
 extern int sentPacketsCount; // Liczba zapisanych wpisów
 struct SentPacketLog {
     int destination;
-    int tag;
     int lamportClock;
 };
 extern struct SentPacketLog sentPacketsLog[MAX_LOG_SIZE];
+
+// Struktura do przechowywania informacji o otrzymanych pakietach REQ
+extern int receivedPacketsCount;
+struct receivedPacket_t {
+    int source; // Źródło pakietu
+    int lamportClock; // Znacznik czasu Lamporta
+};
+extern struct receivedPacket_t receivedPacketsLog[MAX_LOG_SIZE];
 
 // Tablica przechowująca identyfikatory procesów, od których otrzymano ACK
 extern int ackLog[MAX_ACK_LOG_SIZE];
@@ -60,6 +62,7 @@ extern WaitQueue waitQueue;
 #define REQ 5
 #define ACK 6
 #define DUEL 7
+#define END 8
 
 extern MPI_Datatype MPI_PAKIET_T;
 void inicjuj_typ_pakietu();
@@ -100,7 +103,11 @@ void handleDuel(int pair, int win);
 
 void sleepThread(int milliseconds);
 
-void enqueueMessage(packet_t *pakiet);
+void resetVariables();
 
-int dequeueMessage(packet_t *pakiet);
+void printSentPacketsLog();
+
+void printReceivedPacketsLog();
+
+void printAckLog();
 #endif

@@ -27,14 +27,28 @@ extern int tokenReady;
 extern int killers[MAX_SIZE / 2];
 extern int role;
 extern int ackCount;
-typedef enum {REST, WAIT, PAIRING, INWANT, INSECTION, RELEASE, FINISHED} state_t;
+extern int complete;
+extern int cycle;
+extern int pairingReady;
+typedef enum {REST, WAIT, PAIRING, INWANT, INSECTION, FINISHED} state_t;
 extern state_t stan;
 extern pthread_t threadKom, threadMon;
 
 extern pthread_mutex_t stateMut;
+
 extern pthread_mutex_t lamportMut;
+
+extern pthread_mutex_t tokenMut;
+extern pthread_cond_t tokenCond;
+
+extern pthread_mutex_t pairingMut;
+extern pthread_cond_t pairingCond;
+
 extern pthread_mutex_t ackCountMut;
 extern pthread_cond_t ackCond;
+
+extern pthread_mutex_t endMut;
+extern pthread_cond_t endCond;
 
 
 

@@ -3,23 +3,39 @@
 #include "watek_komunikacyjny.h"
 
 int rank, size, localValue, role;
-int lampotClock = 0;
+int lamportClock = 0;
 int ackCount = 0;
 
-int cycles = 3;
-int pistols = 2;
+int cycles = 2;
+int pistols = 1;
 
-//int *token;
+int cycle = 0;
 
 int tokenReady = 0; // Gotowość tokenu
 
+int complete = 0;
+
 int wins = 0;
+
+int pairingReady = 0;
+
 state_t stan=REST;
 pthread_t threadKom, threadMon;
+
 pthread_mutex_t stateMut = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t lamportMut = PTHREAD_MUTEX_INITIALIZER;
+
+pthread_mutex_t tokenMut = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t tokenCond = PTHREAD_COND_INITIALIZER;
+
+pthread_mutex_t pairingMut = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t pairingCond = PTHREAD_COND_INITIALIZER;
+
 pthread_mutex_t ackCountMut = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t ackCond = PTHREAD_COND_INITIALIZER;
+
+pthread_mutex_t endMut = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t endCond = PTHREAD_COND_INITIALIZER;
 
 void finalizuj()
 {
@@ -71,15 +87,35 @@ int main(int argc, char **argv)
 
     // implementacja pętli, która będzie wykonywała się przez określoną liczbę cykli
     for (int i = 0; i < cycles; i++) {
+        cycle = i;
+        complete = 0;
         println("Cykl %d z %d", i + 1, cycles);
         mainLoop();
+        //debug("przed pierwszą barierą w main");
+        MPI_Barrier(MPI_COMM_WORLD);
+        //debug("za pierwszą barierą w main");
+        if (i != cycles - 1) {
+            pthread_mutex_lock(&endMut);
+            complete = 1;
+            pthread_cond_signal(&endCond);
+            pthread_mutex_unlock(&endMut);
+        }
+        debug("Zaraz nowy cykl!!!!!!!!!!!!!!!");
+        MPI_Barrier(MPI_COMM_WORLD);
+        resetVariables();
+        //debug("Zaraz nowy cykl!!!!!!!!!!!!!!!");
     }
+
+    //sleepThread(5500);
+    debug("kończę");
+    pthread_mutex_lock(&endMut);
+    changeState(FINISHED);
+    complete = 1;
+    pthread_cond_signal(&endCond);
+    pthread_mutex_unlock(&endMut);
 
     debug("Zakończyłem z wynikiem: %d wygrane\n", wins);
 
-    changeState(FINISHED);
-    //printf("Zakończyłem z wynikiem: %d wygrane\n", wins);
-    
     finalizuj();
     return 0;
 }
