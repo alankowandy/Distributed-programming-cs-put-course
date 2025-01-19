@@ -19,8 +19,9 @@ void mainLoop()
         pthread_mutex_unlock(&ackCountMut);
 
         println("Wchodzę do sekcji krytycznej");
-        sleepThread(2000);
+        //sleepThread(2000);
         duel(pair);
+        releaseAccess();
 
     } else { // Ofiara
         while (stan == WAIT)

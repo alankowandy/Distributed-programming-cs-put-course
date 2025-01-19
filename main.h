@@ -50,6 +50,12 @@ extern pthread_cond_t ackCond;
 extern pthread_mutex_t endMut;
 extern pthread_cond_t endCond;
 
+extern pthread_mutex_t reqLogMut;
+
+extern pthread_mutex_t sentLogMut;
+
+extern pthread_mutex_t waitQueueMut;
+
 
 
 

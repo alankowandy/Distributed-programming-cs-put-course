@@ -7,7 +7,7 @@ int lamportClock = 0;
 int ackCount = 0;
 
 int cycles = 2;
-int pistols = 1;
+int pistols = 2;
 
 int cycle = 0;
 
@@ -36,6 +36,12 @@ pthread_cond_t ackCond = PTHREAD_COND_INITIALIZER;
 
 pthread_mutex_t endMut = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t endCond = PTHREAD_COND_INITIALIZER;
+
+pthread_mutex_t reqLogMut = PTHREAD_MUTEX_INITIALIZER;
+
+pthread_mutex_t sentLogMut = PTHREAD_MUTEX_INITIALIZER;
+
+pthread_mutex_t waitQueueMut = PTHREAD_MUTEX_INITIALIZER;
 
 void finalizuj()
 {
@@ -94,25 +100,26 @@ int main(int argc, char **argv)
         //debug("przed pierwszą barierą w main");
         MPI_Barrier(MPI_COMM_WORLD);
         //debug("za pierwszą barierą w main");
-        if (i != cycles - 1) {
-            pthread_mutex_lock(&endMut);
-            complete = 1;
-            pthread_cond_signal(&endCond);
-            pthread_mutex_unlock(&endMut);
-        }
+        // if (i != cycles - 1) {
+        //     pthread_mutex_lock(&endMut);
+        //     complete = 1;
+        //     pthread_cond_signal(&endCond);
+        //     pthread_mutex_unlock(&endMut);
+        // }
         debug("Zaraz nowy cykl!!!!!!!!!!!!!!!");
-        MPI_Barrier(MPI_COMM_WORLD);
+        //MPI_Barrier(MPI_COMM_WORLD);
         resetVariables();
         //debug("Zaraz nowy cykl!!!!!!!!!!!!!!!");
     }
 
     //sleepThread(5500);
     debug("kończę");
-    pthread_mutex_lock(&endMut);
-    changeState(FINISHED);
-    complete = 1;
-    pthread_cond_signal(&endCond);
-    pthread_mutex_unlock(&endMut);
+    sendPacket(0, rank, RELEASE);
+    // pthread_mutex_lock(&endMut);
+    // changeState(FINISHED);
+    // complete = 1;
+    // pthread_cond_signal(&endCond);
+    // pthread_mutex_unlock(&endMut);
 
     debug("Zakończyłem z wynikiem: %d wygrane\n", wins);
 

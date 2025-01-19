@@ -62,7 +62,7 @@ extern WaitQueue waitQueue;
 #define REQ 5
 #define ACK 6
 #define DUEL 7
-#define END 8
+#define RELEASE 8
 
 extern MPI_Datatype MPI_PAKIET_T;
 void inicjuj_typ_pakietu();
