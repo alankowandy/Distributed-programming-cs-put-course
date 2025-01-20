@@ -6,7 +6,7 @@ int rank, size, localValue, role;
 int lamportClock = 0;
 int ackCount = 0;
 
-int cycles = 2;
+int cycles = 5;
 int pistols = 2;
 
 int cycle = 0;
@@ -97,29 +97,13 @@ int main(int argc, char **argv)
         complete = 0;
         println("Cykl %d z %d", i + 1, cycles);
         mainLoop();
-        //debug("przed pierwszą barierą w main");
+        debug("jestem przed barierą synch");
         MPI_Barrier(MPI_COMM_WORLD);
-        //debug("za pierwszą barierą w main");
-        // if (i != cycles - 1) {
-        //     pthread_mutex_lock(&endMut);
-        //     complete = 1;
-        //     pthread_cond_signal(&endCond);
-        //     pthread_mutex_unlock(&endMut);
-        // }
-        debug("Zaraz nowy cykl!!!!!!!!!!!!!!!");
         //MPI_Barrier(MPI_COMM_WORLD);
         resetVariables();
-        //debug("Zaraz nowy cykl!!!!!!!!!!!!!!!");
     }
-
-    //sleepThread(5500);
-    debug("kończę");
+    
     sendPacket(0, rank, RELEASE);
-    // pthread_mutex_lock(&endMut);
-    // changeState(FINISHED);
-    // complete = 1;
-    // pthread_cond_signal(&endCond);
-    // pthread_mutex_unlock(&endMut);
 
     debug("Zakończyłem z wynikiem: %d wygrane\n", wins);
 

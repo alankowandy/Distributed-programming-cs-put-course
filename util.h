@@ -28,6 +28,7 @@ extern int localValue;
 extern int token[MAX_SIZE];
 extern int killers[MAX_SIZE / 2];
 extern int release;
+extern int myPosition;
 
 extern int sentPacketsCount; // Liczba zapisanych wpisów
 struct SentPacketLog {

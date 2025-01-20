@@ -7,6 +7,7 @@ int pairValue = 0;
 int release = 0;
 int token[MAX_SIZE];
 int killers[MAX_SIZE / 2];
+int myPosition = -1;
 
 int sentPacketsCount = 0;
 struct SentPacketLog sentPacketsLog[MAX_LOG_SIZE];
@@ -106,6 +107,7 @@ packet_t assignRoleAndPair() {
         srandom(time(NULL) + rank + rand()); // Unikalne ziarno generatora
     }
     localValue = random() % 1000; // Wylosowana wartość
+    debug("my local value: %d", localValue);
     packet_t tokenValues; // Token z wartościami
 
     if (rank == 0) {
@@ -124,18 +126,6 @@ packet_t assignRoleAndPair() {
         MPI_Send(&tokenValues, 1, MPI_PAKIET_T, 1, INITIAL_TOKEN, MPI_COMM_WORLD);
         debug("Wysłałem token do procesu 1");
 
-        // Odbiór finalnego tokenu z wartościami od ostatniego procesu
-        //MPI_Recv(&tokenValues, 1, MPI_PAKIET_T, size - 1, INITIAL_TOKEN, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        // updateLamportClock(tokenValues.ts);
-        // debug("Odebrałem finalny token od procesu %d", size - 1);
-
-        //memcpy(token, tokenValues.token, MAX_SIZE * sizeof(int));
-        // incrementLamportClock();
-        // tokenValues.ts = lamportClock;
-        // tokenValues.src = rank;
-        // Przekazanie wypełnionego tokenu do następnego procesu
-        // MPI_Send(&tokenValues, 1, MPI_PAKIET_T, 1, FINAL_TOKEN, MPI_COMM_WORLD);
-        // debug("Wysłałem wypełniony token do procesu 1");
         pthread_mutex_lock(&tokenMut);
         while (!tokenReady) {
             pthread_cond_wait(&tokenCond, &tokenMut); // Czekanie na gotowość tokenu
@@ -150,6 +140,13 @@ packet_t assignRoleAndPair() {
     }
 
     memcpy(tokenValues.token, token, MAX_SIZE * sizeof(int));
+    for (int i = 0; i < size; i++)
+    {
+        debug("tokenvalues[%d] = %d", i, tokenValues.token[i]);
+    }
+
+    
+    
     // Sortowanie wartości
     //debug("Sortuję wartości...");
     for (int i = 0; i < size - 1; i++) {
@@ -162,13 +159,27 @@ packet_t assignRoleAndPair() {
         }
     }
 
+    debug("my local value: %d", localValue);
+    for (int i = 0; i < size; i++)
+        {
+            debug("token[%d] = %d", i, token[i]);
+        }
+    // for (int i = 0; i < size; i++)
+    // {
+    //     debug("tokenvalues[%d] = %d", i, token[i]);
+    // }
+
     // Znalezienie swojej pozycji w posortowanej tablicy
-    int myPosition = -1;
     for (int i = 0; i < size; i++) {
         if (token[i] == localValue) {
             myPosition = i;
+            debug("myposition: %d", myPosition);
             break;
         }
+    }
+
+    if (myPosition == -1) {
+        debug("błąd w myposition");
     }
 
     // Przydzielenie roli i dobór par
@@ -177,7 +188,8 @@ packet_t assignRoleAndPair() {
 
     if (myPosition < half) {
         result.role = 1; // Zabójca
-        pairValue = token[half + (myPosition % half)];
+        pairValue = token[half + myPosition];
+        debug("pair value: %d", pairValue);
         for (int i = 0; i < size; i++) {
             if (tokenValues.token[i] == pairValue) {
                 result.pair = i;
@@ -200,7 +212,7 @@ packet_t assignRoleAndPair() {
     int killerCount = 0; // Licznik zabójców
 
     // Przejdź przez posortowaną tablicę token
-    for (int i = 0; i < size / 2; i++) { // Pierwsza połowa to zabójcy
+    for (int i = 0; i < half; i++) { // Pierwsza połowa to zabójcy
         for (int j = 0; j < size; j++) { // Znajdź rank dla wartości token[i]
             if (token[i] == tokenValues.token[j]) {
                 killers[killerCount] = j;          // Rank zabójcy
@@ -219,24 +231,24 @@ packet_t assignRoleAndPair() {
     return result;
 }
 
-// Wysłanie REQ do wszystkich
 void requestAccess() {
     changeState(INWANT);
     int killerCount = size / 2;
-
-    //packet_t *req = malloc(sizeof(packet_t));
-
-    // for (int i = 0; i < killerCount; i++) {
-    //     if (killers[i] != rank) { // Nie wysyłaj do siebie
-    //         sendPacket(&req, killers[i], REQ);
-    //         //debug("Zabójca %d (rank %d) wysłał wiadomość do zabójcy %d", rank, rank, killers[i]);
-    //     }
-    // }
 
     for (int i = 0; i < killerCount; i++) {
         if (killers[i] != rank) { // Nie wysyłaj do siebie
             int alreadyReceivedREQ = 0;
             int receivedREQTimestamp = -1;
+            int currentAckCount;
+
+            pthread_mutex_lock(&ackCountMut);
+            currentAckCount = ackCount;
+            pthread_mutex_unlock(&ackCountMut);
+
+            if (currentAckCount >= size - pistols) {
+                debug("Osiągnęliśmy ackCount=%d, nie wysyłamy REQ do procesu %d", currentAckCount, killers[i]);
+                continue; // Skip sending REQ if the condition is met
+            }
 
             pthread_mutex_lock(&reqLogMut);
             // Sprawdzanie, czy już otrzymaliśmy REQ od tego procesu
@@ -262,11 +274,62 @@ void requestAccess() {
                 } else {
                     debug("Tablica logów wysyłanych pakietów jest pełna!\n");
                 }
-                pthread_mutex_unlock(&sentLogMut); 
+                pthread_mutex_unlock(&sentLogMut);
             }
         }
     }
 }
+
+// Wysłanie REQ do wszystkich
+// void requestAccess() {
+//     changeState(INWANT);
+//     int killerCount = size / 2;
+
+//     //packet_t *req = malloc(sizeof(packet_t));
+
+//     // for (int i = 0; i < killerCount; i++) {
+//     //     if (killers[i] != rank) { // Nie wysyłaj do siebie
+//     //         sendPacket(&req, killers[i], REQ);
+//     //         //debug("Zabójca %d (rank %d) wysłał wiadomość do zabójcy %d", rank, rank, killers[i]);
+//     //     }
+//     // }
+
+//     // TO-DO - dodać sprawdzanie przed każdym kolejnym wysłaniem czy już mamy wystarczającą ilość ACK
+
+//     for (int i = 0; i < killerCount; i++) {
+//         if (killers[i] != rank) { // Nie wysyłaj do siebie
+//             int alreadyReceivedREQ = 0;
+//             int receivedREQTimestamp = -1;
+
+//             pthread_mutex_lock(&reqLogMut);
+//             // Sprawdzanie, czy już otrzymaliśmy REQ od tego procesu
+//             for (int j = 0; j < receivedPacketsCount; j++) {
+//                 if (receivedPacketsLog[j].source == killers[i]) {
+//                     alreadyReceivedREQ = 1;
+//                     receivedREQTimestamp = receivedPacketsLog[j].lamportClock;
+//                     break;
+//                 }
+//             }
+//             pthread_mutex_unlock(&reqLogMut);
+
+//             // Jeżeli otrzymaliśmy już REQ od tego procesu i ma on mniejszy priorytet to nie wysyłamy REQ
+//             // ponieważ zakładamy że proces wysyłający REQ do nas automatycznie przypisał sobie ACK
+//             if (!alreadyReceivedREQ || lamportClock <= receivedREQTimestamp) {
+//                 sendPacket(0, killers[i], REQ);
+//                 pthread_mutex_lock(&sentLogMut);
+//                 if (sentPacketsCount < MAX_LOG_SIZE) { // Założenie: MAX_LOG_SIZE to maksymalny rozmiar tablicy
+//                     sentPacketsLog[sentPacketsCount].destination = killers[i];
+//                     sentPacketsLog[sentPacketsCount].lamportClock = lamportClock;
+//                     sentPacketsCount++;
+//                     //printSentPacketsLog();
+//                 } else {
+//                     debug("Tablica logów wysyłanych pakietów jest pełna!\n");
+//                 }
+//                 pthread_mutex_unlock(&sentLogMut); 
+//             }
+//         }
+//     }
+// }
 
 int comparePriority(packet_t a, packet_t b) {
     if (a.ts < b.ts) return -1; // Mniejszy znacznik czasu = wyższy priorytet
@@ -400,6 +463,8 @@ void resetVariables() {
     waitQueue.size = 0;
     tokenReady = 0;
     role = -1;
+    myPosition = -1;
+    ackCount = 0;
     //pair = -1;
 
     memset(sentPacketsLog, 0, sizeof(sentPacketsLog));
