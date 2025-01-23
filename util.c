@@ -301,11 +301,6 @@ void handleRequest(int ts, int src) {
             sendPacket(0, src, ACK);
             debug("Wysłałem ACK do %d z kolejki", src);
         }
-        
-        // } else {
-        //     while (stan == INSECTION) {}
-        //     sendPacket(0, src, ACK);
-        // }
     }
 }
 

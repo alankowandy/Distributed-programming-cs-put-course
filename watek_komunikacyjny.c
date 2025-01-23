@@ -112,19 +112,13 @@ void *startKomWatek(void *ptr)
                             // o mniejszym priorytecie oraz nasze ackCount <= size/2 - pistols
                             if (!alreadyReceivedACK && currentAckCount < size/2 - pistols) {
                                 addToWaitQueue(pakiet.ts, pakiet.src);
-                                debug("Dodano z góry ACK od procesu %d (ackCount=%d)", pakiet.src, currentAckCount);
+                                debug("Dodaję z góry ACK od procesu %d (ackCount=%d)", pakiet.src, currentAckCount);
                                 handleAck(pakiet.src);
                                 pthread_mutex_lock(&ackCountMut);
                                 currentAckCount = ackCount;
                                 pthread_mutex_unlock(&ackCountMut);
-                                addedACK = 1;
-
-                                // Jeżeli już otrzymaliśmy ACK od tego procesu i jesteśmy w sekcji krytycznej
-                                // to dodajemy do kolejki oczekujących                            
-                            } 
-                            // else if (alreadyReceivedACK && currentAckCount == size/2 - pistols) {
-                            //     addToWaitQueue(pakiet.ts, pakiet.src);
-                            // }
+                                addedACK = 1;                            
+                            }
                             
                         }
                         break;
@@ -138,21 +132,11 @@ void *startKomWatek(void *ptr)
                     handleRequest(pakiet.ts, pakiet.src);
                 }
                 
-                
-                // Przetwarzamy REQ odpowiednio odsyłając ACK lub dodając do kolejki oczekujących
-                //handleRequest(pakiet.ts, pakiet.src);
-                // if (ackCount >= size/2 - pistols) {
-                //     changeState(INSECTION);
-                // }
-                
             break;
             case ACK:
                 updateLamportClock(pakiet.ts);
                 if (stan != REST && stan != INSECTION) {
                     handleAck(pakiet.src);
-                    // if (ackCount >= size/2 - pistols) {
-                    //     changeState(INSECTION);
-                    // }
                 }
             break;
             case DUEL:
