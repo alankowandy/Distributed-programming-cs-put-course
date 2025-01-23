@@ -97,9 +97,8 @@ int main(int argc, char **argv)
         complete = 0;
         println("Cykl %d z %d", i + 1, cycles);
         mainLoop();
-        debug("jestem przed barierą synch");
+        //debug("jestem przed barierą synch");
         MPI_Barrier(MPI_COMM_WORLD);
-        //MPI_Barrier(MPI_COMM_WORLD);
         resetVariables();
     }
     

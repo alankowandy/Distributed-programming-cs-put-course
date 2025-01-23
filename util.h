@@ -33,6 +33,7 @@ extern int myPosition;
 extern int sentPacketsCount; // Liczba zapisanych wpisów
 struct SentPacketLog {
     int destination;
+    int tag;
     int lamportClock;
 };
 extern struct SentPacketLog sentPacketsLog[MAX_LOG_SIZE];

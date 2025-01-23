@@ -107,7 +107,6 @@ packet_t assignRoleAndPair() {
         srandom(time(NULL) + rank + rand()); // Unikalne ziarno generatora
     }
     localValue = random() % 1000; // Wylosowana wartość
-    debug("my local value: %d", localValue);
     packet_t tokenValues; // Token z wartościami
 
     if (rank == 0) {
@@ -140,15 +139,8 @@ packet_t assignRoleAndPair() {
     }
 
     memcpy(tokenValues.token, token, MAX_SIZE * sizeof(int));
-    for (int i = 0; i < size; i++)
-    {
-        debug("tokenvalues[%d] = %d", i, tokenValues.token[i]);
-    }
-
-    
-    
+   
     // Sortowanie wartości
-    //debug("Sortuję wartości...");
     for (int i = 0; i < size - 1; i++) {
         for (int j = i + 1; j < size; j++) {
             if (token[i] > token[j]) {
@@ -159,21 +151,11 @@ packet_t assignRoleAndPair() {
         }
     }
 
-    debug("my local value: %d", localValue);
-    for (int i = 0; i < size; i++)
-        {
-            debug("token[%d] = %d", i, token[i]);
-        }
-    // for (int i = 0; i < size; i++)
-    // {
-    //     debug("tokenvalues[%d] = %d", i, token[i]);
-    // }
-
     // Znalezienie swojej pozycji w posortowanej tablicy
     for (int i = 0; i < size; i++) {
         if (token[i] == localValue) {
             myPosition = i;
-            debug("myposition: %d", myPosition);
+            //debug("myposition: %d", myPosition);
             break;
         }
     }
@@ -189,7 +171,6 @@ packet_t assignRoleAndPair() {
     if (myPosition < half) {
         result.role = 1; // Zabójca
         pairValue = token[half + myPosition];
-        debug("pair value: %d", pairValue);
         for (int i = 0; i < size; i++) {
             if (tokenValues.token[i] == pairValue) {
                 result.pair = i;
@@ -245,91 +226,27 @@ void requestAccess() {
             currentAckCount = ackCount;
             pthread_mutex_unlock(&ackCountMut);
 
-            if (currentAckCount >= size - pistols) {
-                debug("Osiągnęliśmy ackCount=%d, nie wysyłamy REQ do procesu %d", currentAckCount, killers[i]);
-                continue; // Skip sending REQ if the condition is met
+            // Jeżeli otrzymaliśmy już wystarczającą ilość ACK to nie wysyłam więcej REQ
+            if (currentAckCount >= size/2 - pistols) {
+                debug("Osiągnąłem ackCount=%d, nie wysyłam REQ do procesu %d", currentAckCount, killers[i]);
+                continue;
             }
 
-            pthread_mutex_lock(&reqLogMut);
-            // Sprawdzanie, czy już otrzymaliśmy REQ od tego procesu
-            for (int j = 0; j < receivedPacketsCount; j++) {
-                if (receivedPacketsLog[j].source == killers[i]) {
-                    alreadyReceivedREQ = 1;
-                    receivedREQTimestamp = receivedPacketsLog[j].lamportClock;
-                    break;
-                }
+            sendPacket(0, killers[i], REQ);
+            pthread_mutex_lock(&sentLogMut);
+            if (sentPacketsCount < MAX_LOG_SIZE) {
+                sentPacketsLog[sentPacketsCount].destination = killers[i];
+                sentPacketsLog[sentPacketsCount].tag = REQ;
+                sentPacketsLog[sentPacketsCount].lamportClock = lamportClock;
+                sentPacketsCount++;
+                //printSentPacketsLog();
+            } else {
+                debug("Tablica logów wysyłanych pakietów jest pełna!\n");
             }
-            pthread_mutex_unlock(&reqLogMut);
-
-            // Jeżeli otrzymaliśmy już REQ od tego procesu i ma on mniejszy priorytet to nie wysyłamy REQ
-            // ponieważ zakładamy że proces wysyłający REQ do nas automatycznie przypisał sobie ACK
-            if (!alreadyReceivedREQ || lamportClock <= receivedREQTimestamp) {
-                sendPacket(0, killers[i], REQ);
-                pthread_mutex_lock(&sentLogMut);
-                if (sentPacketsCount < MAX_LOG_SIZE) { // Założenie: MAX_LOG_SIZE to maksymalny rozmiar tablicy
-                    sentPacketsLog[sentPacketsCount].destination = killers[i];
-                    sentPacketsLog[sentPacketsCount].lamportClock = lamportClock;
-                    sentPacketsCount++;
-                    //printSentPacketsLog();
-                } else {
-                    debug("Tablica logów wysyłanych pakietów jest pełna!\n");
-                }
-                pthread_mutex_unlock(&sentLogMut);
-            }
+            pthread_mutex_unlock(&sentLogMut);
         }
     }
 }
-
-// Wysłanie REQ do wszystkich
-// void requestAccess() {
-//     changeState(INWANT);
-//     int killerCount = size / 2;
-
-//     //packet_t *req = malloc(sizeof(packet_t));
-
-//     // for (int i = 0; i < killerCount; i++) {
-//     //     if (killers[i] != rank) { // Nie wysyłaj do siebie
-//     //         sendPacket(&req, killers[i], REQ);
-//     //         //debug("Zabójca %d (rank %d) wysłał wiadomość do zabójcy %d", rank, rank, killers[i]);
-//     //     }
-//     // }
-
-//     // TO-DO - dodać sprawdzanie przed każdym kolejnym wysłaniem czy już mamy wystarczającą ilość ACK
-
-//     for (int i = 0; i < killerCount; i++) {
-//         if (killers[i] != rank) { // Nie wysyłaj do siebie
-//             int alreadyReceivedREQ = 0;
-//             int receivedREQTimestamp = -1;
-
-//             pthread_mutex_lock(&reqLogMut);
-//             // Sprawdzanie, czy już otrzymaliśmy REQ od tego procesu
-//             for (int j = 0; j < receivedPacketsCount; j++) {
-//                 if (receivedPacketsLog[j].source == killers[i]) {
-//                     alreadyReceivedREQ = 1;
-//                     receivedREQTimestamp = receivedPacketsLog[j].lamportClock;
-//                     break;
-//                 }
-//             }
-//             pthread_mutex_unlock(&reqLogMut);
-
-//             // Jeżeli otrzymaliśmy już REQ od tego procesu i ma on mniejszy priorytet to nie wysyłamy REQ
-//             // ponieważ zakładamy że proces wysyłający REQ do nas automatycznie przypisał sobie ACK
-//             if (!alreadyReceivedREQ || lamportClock <= receivedREQTimestamp) {
-//                 sendPacket(0, killers[i], REQ);
-//                 pthread_mutex_lock(&sentLogMut);
-//                 if (sentPacketsCount < MAX_LOG_SIZE) { // Założenie: MAX_LOG_SIZE to maksymalny rozmiar tablicy
-//                     sentPacketsLog[sentPacketsCount].destination = killers[i];
-//                     sentPacketsLog[sentPacketsCount].lamportClock = lamportClock;
-//                     sentPacketsCount++;
-//                     //printSentPacketsLog();
-//                 } else {
-//                     debug("Tablica logów wysyłanych pakietów jest pełna!\n");
-//                 }
-//                 pthread_mutex_unlock(&sentLogMut); 
-//             }
-//         }
-//     }
-// }
 
 int comparePriority(packet_t a, packet_t b) {
     if (a.ts < b.ts) return -1; // Mniejszy znacznik czasu = wyższy priorytet
@@ -369,12 +286,26 @@ void addToWaitQueue(int ts, int src) {
 // Obsługa otrzymanego REQ
 void handleRequest(int ts, int src) {
 
-    // jeśli moje żądanie ma niższy priorytet to wysyłam ACK
-    if (ts < lamportClock || (ts == lamportClock && src < rank)) {
+    int addedToQueue = 0;
+    // Jeśli moje żądanie ma niższy priorytet to wysyłam ACK
+    if ((ts < lamportClock || (ts == lamportClock && src < rank)) && stan != INSECTION) {
         sendPacket(0, src, ACK);
     } else { // jeśli moje żądanie ma większy priorytet to dodaje do kolejki oczekujacych
-        addToWaitQueue(ts, src);
-        debug("Dodałem %d do kolejki oczekujących", src);
+        if (stan != REST && stan != INSECTION) {
+            addToWaitQueue(ts, src);
+            addedToQueue = 1;
+            debug("Dodałem %d do kolejki oczekujących", src)
+        }
+        if (!addedToQueue) {
+            while (stan == INSECTION) {}
+            sendPacket(0, src, ACK);
+            debug("Wysłałem ACK do %d z kolejki", src);
+        }
+        
+        // } else {
+        //     while (stan == INSECTION) {}
+        //     sendPacket(0, src, ACK);
+        // }
     }
 }
 
@@ -383,6 +314,11 @@ void handleAck(int src) {
     pthread_mutex_lock(&ackCountMut);
     ackCount++;
     debug("Otrzymałem ACK od %d (ackCount=%d)", src, ackCount);
+
+    if (ackCount >= size/2 - pistols) {
+        changeState(INSECTION);
+    }
+    
     pthread_cond_signal(&ackCond); // Powiadomienie wątku głównego by sprawdził czy warunek wejścia do sekcji jest spełniony
 
     if (ackLogCount < MAX_ACK_LOG_SIZE) {
@@ -392,11 +328,11 @@ void handleAck(int src) {
         debug("Tablica ackLog jest pełna! Nie można zapisać procesu %d", src);
     }
     pthread_mutex_unlock(&ackCountMut);
-    //printAckLog();
 }
 
 // Zwolnienie sekcji krytycznej i wysłanie ACK do procesów w kolejce
 void releaseAccess() {
+    changeState(REST);
     pthread_mutex_lock(&waitQueueMut);
     debug("Zwalniam sekcję krytyczną");
 
@@ -406,8 +342,7 @@ void releaseAccess() {
         debug("Wysłałem ACK do %d z kolejki", waitQueue.queue[i].src);
     }
     waitQueue.size = 0;
-    ackCount = 0;
-    changeState(REST);
+    //ackCount = 0;
     pthread_mutex_unlock(&waitQueueMut);
 }
 

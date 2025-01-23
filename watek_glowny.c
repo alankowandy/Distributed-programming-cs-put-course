@@ -18,9 +18,11 @@ void mainLoop()
         }
         pthread_mutex_unlock(&ackCountMut);
 
+        //changeState(INSECTION);
         println("Wchodzę do sekcji krytycznej");
-        //sleepThread(2000);
+        //sleepThread(3000);
         duel(pair);
+        
         releaseAccess();
 
     } else { // Ofiara

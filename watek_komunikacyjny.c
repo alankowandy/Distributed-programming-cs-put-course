@@ -67,6 +67,7 @@ void *startKomWatek(void *ptr)
                 changeState(WAIT);
             break;
             case REQ:
+                updateLamportClock(pakiet.ts);
                 debug("Otrzymałem REQ od %d", status.MPI_SOURCE);
 
                 // Zapisanie otrzymanego REQ do tablicy
@@ -83,17 +84,17 @@ void *startKomWatek(void *ptr)
                     receivedPacketsLog[receivedPacketsCount].source = status.MPI_SOURCE;
                     receivedPacketsLog[receivedPacketsCount].lamportClock = pakiet.ts;
                     receivedPacketsCount++;
-                    //printReceivedPacketsLog();
                 }
                 pthread_mutex_unlock(&reqLogMut);
-                debug("przeszedłem przez req mutexa");
 
                 // Sprawdzenie, czy wcześniej wysłano REQ do tego procesu
+                int addedACK = 0;
                 pthread_mutex_lock(&sentLogMut);
                 for (int i = 0; i < sentPacketsCount; i++) {
-                    if (sentPacketsLog[i].destination == pakiet.src) {
+                    if (sentPacketsLog[i].destination == pakiet.src && sentPacketsLog[i].tag == REQ) {
                         if (sentPacketsLog[i].lamportClock < pakiet.ts) {
-                            // Sprawdzenie, czy nie otrzymano już ACK od tego procesu
+                            // Sprawdzenie, czy nie otrzymano już ACK od tego procesu, jeżeli już wysłaliśmy REQ
+                            // a jeżeli już otrzymaliśmy to nie dodajemy sobie z góry ACK przy założeniu że mamy wyższy priorytet
                             int alreadyReceivedACK = 0;
                             for (int j = 0; j < ackLogCount; j++) {
                                 if (ackLog[j] == pakiet.src) {
@@ -107,24 +108,43 @@ void *startKomWatek(void *ptr)
                             currentAckCount = ackCount;
                             pthread_mutex_unlock(&ackCountMut);
 
-                            // Dodanie ACK, jeśli jeszcze go nie otrzymano i ackCount <= size - pistols
-                            if (!alreadyReceivedACK && currentAckCount <= size - pistols) {
+                            // Dodanie ACK z góry, jeśli jeszcze go nie otrzymano, a wysłaliśmy REQ i teraz dostaliśmy REQ od tego samego procesu
+                            // o mniejszym priorytecie oraz nasze ackCount <= size/2 - pistols
+                            if (!alreadyReceivedACK && currentAckCount < size/2 - pistols) {
+                                addToWaitQueue(pakiet.ts, pakiet.src);
+                                debug("Dodano z góry ACK od procesu %d (ackCount=%d)", pakiet.src, currentAckCount);
                                 handleAck(pakiet.src);
-                                debug("Dodano z góry ACK od procesu %d (ackCount=%d)", pakiet.src, currentAckCount + 1); // +1 to reflect the new ACK
-                                pthread_cond_signal(&ackCond);                              
-                            }
+                                pthread_mutex_lock(&ackCountMut);
+                                currentAckCount = ackCount;
+                                pthread_mutex_unlock(&ackCountMut);
+                                addedACK = 1;
+
+                                // Jeżeli już otrzymaliśmy ACK od tego procesu i jesteśmy w sekcji krytycznej
+                                // to dodajemy do kolejki oczekujących                            
+                            } 
+                            // else if (alreadyReceivedACK && currentAckCount == size/2 - pistols) {
+                            //     addToWaitQueue(pakiet.ts, pakiet.src);
+                            // }
+                            
                         }
                         break;
                     }
                 }
                 pthread_mutex_unlock(&sentLogMut);
-                debug("przeszedłem przez sent mutexa");
 
-                handleRequest(pakiet.ts, pakiet.src);
-                if (ackCount >= size/2 - pistols) {
-                    changeState(INSECTION);
+                if (stan == REST) {
+                    sendPacket(0, pakiet.src, ACK);
+                } else if (!addedACK) {
+                    handleRequest(pakiet.ts, pakiet.src);
                 }
-                updateLamportClock(pakiet.ts);
+                
+                
+                // Przetwarzamy REQ odpowiednio odsyłając ACK lub dodając do kolejki oczekujących
+                //handleRequest(pakiet.ts, pakiet.src);
+                // if (ackCount >= size/2 - pistols) {
+                //     changeState(INSECTION);
+                // }
+                
             break;
             case ACK:
                 updateLamportClock(pakiet.ts);
